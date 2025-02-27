@@ -49,7 +49,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 	When("Upgrading the cluster", Ordered, func() {
 		It("should accept the version upgrade", func() {
 			cluster := unstructured.Unstructured{}
-			cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.opster.io", Version: "v1", Kind: "OpenSearchCluster"})
+			cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.dremio.io", Version: "v1", Kind: "OpenSearchCluster"})
 			Get(&cluster, client.ObjectKey{Name: name, Namespace: namespace}, time.Second*5)
 
 			SetNestedKey(cluster.Object, "2.3.0", "spec", "general", "version")

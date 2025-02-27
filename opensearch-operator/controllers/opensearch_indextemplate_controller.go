@@ -23,9 +23,9 @@ type OpensearchIndexTemplateReconciler struct {
 	logr.Logger
 }
 
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchindextemplates,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchindextemplates/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchindextemplates/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.dremio.io,resources=opensearchindextemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.dremio.io,resources=opensearchindextemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.dremio.io,resources=opensearchindextemplates/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

@@ -98,7 +98,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 	OpensearchCluster := &opsterv1.OpenSearchCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "OpenSearchCluster",
-			APIVersion: "opensearch.opster.io/v1",
+			APIVersion: "opensearch.dremio.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,

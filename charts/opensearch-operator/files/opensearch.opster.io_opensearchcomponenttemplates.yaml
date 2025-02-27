@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: opensearchcomponenttemplates.opensearch.opster.io
+  name: opensearchcomponenttemplates.opensearch.dremio.io
 spec:
-  group: opensearch.opster.io
+  group: opensearch.dremio.io
   names:
     kind: OpensearchComponentTemplate
     listKind: OpensearchComponentTemplateList

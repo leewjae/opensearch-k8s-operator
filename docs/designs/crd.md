@@ -10,7 +10,7 @@ The CustomResourceDefinition API resource allows you to define custom resources.
 The `OpensearchCLuster` CRD is representing an Opensearch cluster.
 
 
-Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.opster.io` and version `v1`.
+Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.dremio.io` and version `v1`.
 <table>
     <thead>
         <tr>
@@ -23,7 +23,7 @@ Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.opster.io` an
     <tbody><tr>
       <td><b>apiVersion</b></td>
       <td>string</td>
-      <td>opensearch.opster.io/v1</td>
+      <td>opensearch.dremio.io/v1</td>
       <td>true</td>
       </tr>
       <tr>

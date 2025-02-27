@@ -1,4 +1,4 @@
-apiVersion: opster.opensearch.opster.io/v1
+apiVersion: opster.opensearch.dremio.io/v1
 kind: OpensearchUserRoleBinding
 metadata:
   name: opensearchuserrolebinding-sample

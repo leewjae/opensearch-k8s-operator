@@ -104,7 +104,7 @@ func main() {
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "a867c7dc.opensearch.opster.io",
+		LeaderElectionID:       "a867c7dc.opensearch.dremio.io",
 		Namespace:              watchNamespace,
 	})
 	if err != nil {
