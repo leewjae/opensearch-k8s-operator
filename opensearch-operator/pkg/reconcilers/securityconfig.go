@@ -31,9 +31,9 @@ const (
 
 	SecurityAdminBaseCmdTmpl = `ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;
 chmod +x $ADMIN;
-until curl -k --silent https://%s:%v;
+until nc %s %v -w1 > /dev/null;
 do
-echo 'Waiting to connect to the cluster'; sleep 120;
+echo 'Waiting to connect to the cluster'; sleep 20;
 done;`
 
 	ApplyAllYmlCmdTmpl = `count=0;

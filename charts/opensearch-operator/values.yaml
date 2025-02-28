@@ -1,5 +1,8 @@
 nameOverride: ""
-fullnameOverride: ""
+# Some service names exceed 63 char limit when default
+# logic is used with release name = dremio and app name = dremio-ee-opensearch-operator-helm.
+# Shorten the name with this override.
+fullnameOverride: "dremio-os-operator"
 
 podAnnotations: {}
 podLabels: {}
@@ -47,10 +50,10 @@ manager:
   pprofEndpointsEnabled: false
 
   image:
-    repository: opensearchproject/opensearch-operator
+    repository: quay.io/dremio/dremio-ee-opensearch-operator
     ## tag default uses appVersion from Chart.yaml, to override specify tag tag: "v1.1"
-    tag: ""
-    pullPolicy: "Always"
+    tag: "26.0.0"
+    pullPolicy: "IfNotPresent"
 
   ## Optional array of imagePullSecrets containing private registry credentials
   imagePullSecrets: []
