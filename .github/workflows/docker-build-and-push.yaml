@@ -1,0 +1,67 @@
+name: Build and Push OpenSearch Operator image and its helm chart
+
+on:
+  workflow_dispatch:
+    inputs:
+      REGISTRY:
+        description: 'Artifact registry URL'
+        required: true
+        default: 'us-west1-docker.pkg.dev'
+      REPOSITORY:
+        description: 'Container repository path'
+        required: true
+        default: 'dremio-1093/dremio/dremio-opensearch-operator'
+      HELM_REPOSITORY:
+        description: 'Helm chart repository path'
+        required: true
+        default: 'dremio-1093/dremio/dremio-opensearch-operator-helm'
+      VERSION_OF_OPEN_SEARCH_OPERATOR:
+        description: 'Version of OpenSearch Operator'
+        required: false
+        # Update after merging with OSS code.
+        default: '2.7.0'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up environment
+        run: |
+          echo "VERSION_OF_OPEN_SEARCH_OPERATOR=${{ github.event.inputs.VERSION_OF_OPEN_SEARCH_OPERATOR }}" >> $GITHUB_ENV
+          echo "HEAD_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/73420150722/locations/global/workloadIdentityPools/github/providers/github'
+          service_account: github-actions-artifact-writer@dremio-1093.iam.gserviceaccount.com
+
+      - name: Configure Docker
+        run: |
+          gcloud auth configure-docker ${{ github.event.inputs.REGISTRY }}
+
+      - name: Build and push operator image
+        run: |
+          export IMG=${{ github.event.inputs.REGISTRY }}/${{ github.event.inputs.REPOSITORY }}:${VERSION_OF_OPEN_SEARCH_OPERATOR}-${HEAD_SHA}-${TIMESTAMP}
+          make docker-build-multiarch
+          make docker-push
+
+      - name: Package and push Helm chart
+        run: |
+          export CHART_VERSION=${VERSION_OF_OPEN_SEARCH_OPERATOR}-${HEAD_SHA}-${TIMESTAMP}
+          helm package charts/opensearch-operator --version $CHART_VERSION
+          helm push opensearch-operator-${CHART_VERSION}.tgz ${{ github.event.inputs.REGISTRY }}/${{ github.event.inputs.HELM_REPOSITORY }}
+
+      - name: Tag version in Git
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+          git tag ${VERSION_OF_OPEN_SEARCH_OPERATOR}-${HEAD_SHA}-${TIMESTAMP}
+          git push origin ${VERSION_OF_OPEN_SEARCH_OPERATOR}-${HEAD_SHA}-${TIMESTAMP}
