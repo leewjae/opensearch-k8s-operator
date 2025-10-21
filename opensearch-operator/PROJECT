@@ -66,4 +66,13 @@ resources:
   group: opensearch.dremio.io
   kind: OpensearchISMPolicy
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.dremio.io
+  group: opensearch.dremio.io
+  kind: OpensearchSnapshotPolicy
+  path: github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
 version: "3"

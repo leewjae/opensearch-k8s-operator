@@ -12,12 +12,13 @@ description: The OpenSearch Operator Helm chart for Kubernetes
 # pipeline. Library charts do not define any templates and therefore cannot be deployed.
 type: application
 
-# Version of the chart is aligned with release version.
-version: 26.0.0
+# This is the opensearch-operator chart version. This version number should be incremented each time you make changes
+# to the chart and its templates, including the app version.
+# Versions are expected to follow Semantic Versioning (https://semver.org/)
+version: 2.8.0
 
 # This is the version number of the application being deployed (the operator). This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-# App version is aligned with release version.
-appVersion: 26.0.0
+appVersion: 2.8.0

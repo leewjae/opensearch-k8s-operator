@@ -22,12 +22,19 @@ import (
 	"os"
 	"strconv"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
 	"go.uber.org/zap/zapcore"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
+	"net/http"
+	_ "net/http/pprof"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -37,9 +44,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	"net/http"
-	_ "net/http/pprof"
 )
 
 var (
@@ -73,8 +77,23 @@ func main() {
 		Development: false,
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
 	}
+
+	messageKey := os.Getenv("OPERATOR_LOGGING_MESSAGE_KEY")
+	if messageKey != "" {
+		opts.EncoderConfigOptions = append(opts.EncoderConfigOptions, func(ec *zapcore.EncoderConfig) {
+			ec.MessageKey = messageKey
+		})
+	}
+
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	var cacheOpts cache.Options
+	if watchNamespace != "" {
+		cacheOpts.DefaultNamespaces = map[string]cache.Config{
+			watchNamespace: {},
+		}
+	}
 
 	level, err := zapcore.ParseLevel(logLevel)
 	if err != nil {
@@ -99,13 +118,17 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "a867c7dc.opensearch.dremio.io",
-		Namespace:              watchNamespace,
+		Cache:                  cacheOpts,
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port: 9443,
+		}),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -183,6 +206,14 @@ func main() {
 		Recorder: mgr.GetEventRecorderFor("componenttemplate-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchComponentTemplate")
+		os.Exit(1)
+	}
+	if err = (&controllers.OpensearchSnapshotPolicyReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("snapshotpolicy-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSnapshotPolicy")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
