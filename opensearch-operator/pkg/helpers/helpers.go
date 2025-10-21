@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"reflect"
 	"sort"
 	"time"
@@ -30,6 +32,10 @@ const (
 	updateStepTime    = 3
 
 	stsRevisionLabel = "controller-revision-hash"
+
+	// Default UID and GID for OpenSearch containers
+	DefaultUID = int64(1000)
+	DefaultGID = int64(1000)
 )
 
 func ContainsString(slice []string, s string) bool {
@@ -201,15 +207,26 @@ func MapClusterRole(role string, ver string) string {
 	if err != nil {
 		return role
 	}
-	clusterManagerVer, _ := version.NewVersion("2.0.0")
-	is2XVersion := osVer.GreaterThanOrEqual(clusterManagerVer)
-	if role == "master" && is2XVersion {
-		return "cluster_manager"
-	} else if role == "cluster_manager" && !is2XVersion {
-		return "master"
-	} else {
-		return role
+
+	majorVersion := osVer.Segments()[0]
+	roleMap := map[int]map[string]string{
+		1: {
+			"cluster_manager": "master",
+		},
+		2: {
+			"master": "cluster_manager",
+			"warm":   "search",
+		},
+		3: {
+			"master": "cluster_manager",
+		},
 	}
+
+	if mappedRole, ok := roleMap[majorVersion][role]; ok {
+		return mappedRole
+	}
+
+	return role
 }
 
 func MapClusterRoles(roles []string, version string) []string {
@@ -236,7 +253,7 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 // Count the number of pods running and ready and not terminating for a given nodePool
 func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
 	// Constrict selector from labels
-	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
+	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
 		return 0, err
 	}
@@ -255,7 +272,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearc
 	numReadyPods := 0
 	for _, pod := range list.Items {
 		// If DeletionTimestamp is set the pod is terminating
-		podReady := pod.ObjectMeta.DeletionTimestamp == nil
+		podReady := pod.DeletionTimestamp == nil
 		// Count the pod as not ready if one of its containers is not running or not ready
 		for _, container := range pod.Status.ContainerStatuses {
 			if !container.Ready || container.State.Running == nil {
@@ -271,7 +288,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearc
 
 // Count the number of PVCs created for the given NodePool
 func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
-	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
+	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
 		return 0, err
 	}
@@ -465,7 +482,7 @@ func IsUpgradeInProgress(status opsterv1.ClusterStatus) bool {
 }
 
 func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
-	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
+	return fmt.Sprintf("%s-%d", currentSts.Name, repNum)
 }
 
 func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (string, error) {
@@ -551,4 +568,36 @@ func DeleteDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNam
 	}
 
 	return fmt.Errorf("failed to delete dashboards deployment for cluster %s", clusterName)
+}
+
+func SafeClose(c io.Closer) {
+	if err := c.Close(); err != nil {
+		log.Println("SafeClose error:", err)
+	}
+}
+
+// ResolveUidGid resolves the UID and GID using security context hierarchy
+// Priority: securityContext.runAsUser/Group > podSecurityContext.runAsUser/Group > defaults (1000:1000)
+func ResolveUidGid(cr *opsterv1.OpenSearchCluster) (uid, gid int64) {
+	uid = DefaultUID
+	gid = DefaultGID
+
+	if cr.Spec.General.SecurityContext != nil && cr.Spec.General.SecurityContext.RunAsUser != nil {
+		uid = *cr.Spec.General.SecurityContext.RunAsUser
+	} else if cr.Spec.General.PodSecurityContext != nil && cr.Spec.General.PodSecurityContext.RunAsUser != nil {
+		uid = *cr.Spec.General.PodSecurityContext.RunAsUser
+	}
+
+	if cr.Spec.General.SecurityContext != nil && cr.Spec.General.SecurityContext.RunAsGroup != nil {
+		gid = *cr.Spec.General.SecurityContext.RunAsGroup
+	} else if cr.Spec.General.PodSecurityContext != nil && cr.Spec.General.PodSecurityContext.RunAsGroup != nil {
+		gid = *cr.Spec.General.PodSecurityContext.RunAsGroup
+	}
+
+	return uid, gid
+}
+
+// GetChownCommand creates a chown command with the given UID, GID, and path
+func GetChownCommand(uid, gid int64, path string) string {
+	return fmt.Sprintf("chown -R %d:%d %s", uid, gid, path)
 }

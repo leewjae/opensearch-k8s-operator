@@ -386,3 +386,29 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - opensearch.dremio.io
+  resources:
+  - opensearchsnapshotpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.dremio.io
+  resources:
+  - opensearchsnapshotpolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.dremio.io
+  resources:
+  - opensearchsnapshotpolicies/finalizers
+  verbs:
+  - update

@@ -12,14 +12,10 @@ jobs:
         with:
           go-version-file: 'go.work'
           cache: false
-      # Temporarily disabled: golangci-lint typecheck has compatibility issues with Go 1.23 + k8s.io dependencies
-      # Even v1.60.3 (which officially supports Go 1.23) fails with "unsupported version" errors
-      # Code compiles successfully with `go build ./...` - these are false positives
-      # Re-enable once golangci-lint resolves k8s.io/apimachinery compatibility
-      # - name: lint go
-      #   uses: golangci/golangci-lint-action@v4
-      #   with:
-      #     # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
-      #     version: v1.57
-      #     working-directory: opensearch-operator
-      #     args: --timeout=6m --skip-dirs="(^|/)responses($|/)" -v
+      - name: lint go
+        uses: golangci/golangci-lint-action@v8
+        with:
+          # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
+          version: v2.1
+          working-directory: opensearch-operator
+          args: --timeout=6m --skip-dirs="(^|/)responses($|/)" -v
