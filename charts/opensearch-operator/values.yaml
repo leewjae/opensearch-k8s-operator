@@ -70,6 +70,10 @@ manager:
 
 # Install the Custom Resource Definitions with Helm
 installCRDs: true
+# Render CRD templates during initial install. Leave disabled when using this chart as a dependency
+# so Helm's built-in CRD installation handles the first install. Enable for workflows such as
+# `helm template --include-crds` where the automatic CRD phase is not executed.
+renderCRDsOnInstall: false
 
 serviceAccount:
   # Specifies whether a service account should be created
