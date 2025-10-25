@@ -658,7 +658,7 @@ var _ = Describe("Builders", func() {
 			Expect(result.Name).To(Equal(expectedName))
 			Expect(result.Namespace).To(Equal(clusterObject.Namespace))
 			Expect(result.Spec.AccessModes).To(ContainElement(corev1.ReadWriteOnce))
-			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("1Gi")))
+			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("10Gi")))
 		})
 
 		It("should use custom storage size from bootstrap resources", func() {

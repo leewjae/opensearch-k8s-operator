@@ -784,6 +784,7 @@ func NewBootstrapPod(
 		helpers.ClusterLabel: cr.Name,
 	}
 	resources := cr.Spec.Bootstrap.Resources
+	containerResources := sanitizeContainerResources(resources)
 
 	var jvm string
 	if cr.Spec.Bootstrap.Jvm == "" {
@@ -953,7 +954,7 @@ func NewBootstrapPod(
 			Name:            "keystore",
 			Image:           image.GetImage(),
 			ImagePullPolicy: image.GetImagePullPolicy(),
-			Resources:       resources,
+			Resources:       containerResources,
 			Command: []string{
 				"sh",
 				"-c",
@@ -1005,7 +1006,7 @@ func NewBootstrapPod(
 					Command:         mainCommand,
 					Image:           image.GetImage(),
 					ImagePullPolicy: image.GetImagePullPolicy(),
-					Resources:       resources,
+					Resources:       containerResources,
 					Ports: []corev1.ContainerPort{
 						{
 							Name:          "http",
@@ -1102,7 +1103,7 @@ func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeCla
 
 	// Use default storage class and ReadWriteOnce access mode
 	// The bootstrap pod only needs a small amount of storage for cluster metadata
-	storageSize := "1Gi"
+	storageSize := "10Gi"
 	if cr.Spec.Bootstrap.Resources.Requests != nil {
 		if size, exists := cr.Spec.Bootstrap.Resources.Requests["storage"]; exists {
 			storageSize = size.String()
@@ -1126,6 +1127,29 @@ func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeCla
 			},
 		},
 	}
+}
+
+func sanitizeContainerResources(res corev1.ResourceRequirements) corev1.ResourceRequirements {
+	cleaned := res.DeepCopy()
+	if cleaned == nil {
+		return res
+	}
+
+	if cleaned.Requests != nil {
+		delete(cleaned.Requests, corev1.ResourceStorage)
+		if len(cleaned.Requests) == 0 {
+			cleaned.Requests = nil
+		}
+	}
+
+	if cleaned.Limits != nil {
+		delete(cleaned.Limits, corev1.ResourceStorage)
+		if len(cleaned.Limits) == 0 {
+			cleaned.Limits = nil
+		}
+	}
+
+	return *cleaned
 }
 
 func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
