@@ -8,7 +8,10 @@ import (
 	"log"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
@@ -45,6 +48,34 @@ func ContainsString(slice []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// ClusterURL returns the URL for communicating with the OpenSearch cluster.
+// If OperatorClusterURL is specified, it uses that custom URL.
+// Otherwise, it constructs the default internal Kubernetes service DNS name.
+func ClusterURL(cluster *opsterv1.OpenSearchCluster) string {
+	httpPort := cluster.Spec.General.HttpPort
+	if httpPort == 0 {
+		httpPort = 9200 // default port
+	}
+
+	protocol := "https"
+	if cluster.Spec.General.DisableSSL {
+		protocol = "http"
+	}
+
+	if cluster.Spec.General.OperatorClusterURL != nil && *cluster.Spec.General.OperatorClusterURL != "" {
+		return fmt.Sprintf("%s://%s:%d", protocol, *cluster.Spec.General.OperatorClusterURL, httpPort)
+	}
+
+	// Default internal Kubernetes service DNS name
+	return fmt.Sprintf("%s://%s.%s.svc.%s:%d",
+		protocol,
+		cluster.Spec.General.ServiceName,
+		cluster.Namespace,
+		ClusterDnsBase(),
+		httpPort,
+	)
 }
 
 func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
@@ -154,13 +185,14 @@ func GetByComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatu
 }
 
 func MergeConfigs(left map[string]string, right map[string]string) map[string]string {
-	if left == nil {
-		return right
+	result := make(map[string]string)
+	for k, v := range left {
+		result[k] = v
 	}
 	for k, v := range right {
-		left[k] = v
+		result[k] = v
 	}
-	return left
+	return result
 }
 
 // Return the keys of the input map in sorted order
@@ -284,6 +316,15 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearc
 		}
 	}
 	return numReadyPods, nil
+}
+
+// ReadyReplicasForNodePool returns the number of ready replicas derived from the actual running pods.
+func ReadyReplicasForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int32, error) {
+	numReadyPods, err := CountRunningPodsForNodePool(k8sClient, cr, nodePool)
+	if err != nil {
+		return 0, err
+	}
+	return int32(numReadyPods), nil
 }
 
 // Count the number of PVCs created for the given NodePool
@@ -443,25 +484,23 @@ func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) pol
 	return newpdb
 }
 
-func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
-	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
-
-	if nodePool.Jvm == "" {
-		memoryLimit := nodePool.Resources.Requests.Memory()
-
-		// Memory request is not present
-		if memoryLimit.IsZero() {
-			return fmt.Sprintf(jvmHeapSizeTemplate, "512M", "512M")
-		}
-
-		// Set Java Heap size to half of the node pool memory size
-		megabytes := float64((memoryLimit.Value() / 2) / 1024.0 / 1024.0)
-
-		heapSize := fmt.Sprintf("%vM", megabytes)
-		return fmt.Sprintf(jvmHeapSizeTemplate, heapSize, heapSize)
+func AppendJvmHeapSizeSettings(jvm string, heapSizeSettings string) string {
+	if strings.Contains(jvm, "Xms") || strings.Contains(jvm, "Xmx") {
+		return jvm
 	}
+	if jvm == "" {
+		return heapSizeSettings
+	}
+	return fmt.Sprintf("%s %s", jvm, heapSizeSettings)
+}
 
-	return nodePool.Jvm
+func CalculateJvmHeapSizeSettings(memoryRequest *resource.Quantity) string {
+	var memoryRequestMb int64 = 512
+	if memoryRequest != nil && !memoryRequest.IsZero() {
+		memoryRequestMb = ((memoryRequest.Value() / 2.0) / 1024.0) / 1024.0
+	}
+	// Set Java Heap size to half of the node pool memory request for both Xms and Xmx
+	return fmt.Sprintf("-Xms%dM -Xmx%dM", memoryRequestMb, memoryRequestMb)
 }
 
 func IsUpgradeInProgress(status opsterv1.ClusterStatus) bool {
@@ -600,4 +639,20 @@ func ResolveUidGid(cr *opsterv1.OpenSearchCluster) (uid, gid int64) {
 // GetChownCommand creates a chown command with the given UID, GID, and path
 func GetChownCommand(uid, gid int64, path string) string {
 	return fmt.Sprintf("chown -R %d:%d %s", uid, gid, path)
+}
+
+// GenComponentTemplateName generates the component template name from the resource
+func GenComponentTemplateName(template *opsterv1.OpensearchComponentTemplate) string {
+	if template.Spec.Name != "" {
+		return template.Spec.Name
+	}
+	return template.Name
+}
+
+// GenIndexTemplateName generates the index template name from the resource
+func GenIndexTemplateName(template *opsterv1.OpensearchIndexTemplate) string {
+	if template.Spec.Name != "" {
+		return template.Spec.Name
+	}
+	return template.Name
 }

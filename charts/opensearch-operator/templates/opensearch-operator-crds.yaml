@@ -1,5 +1,0 @@
-{{- if and .Values.installCRDs (or .Release.IsUpgrade .Values.renderCRDsOnInstall) -}}
-{{- range $path, $bytes := .Files.Glob "crds/*.yaml" }}
-{{ $.Files.Get $path }}
-{{- end }}
-{{- end }}

@@ -167,7 +167,7 @@ GeneralConfig defines global Opensearch cluster configuration
         <td><b>SetVMMaxMapCount</b></td>
         <td>bool</td>
         <td>will add VMmaxMapCount</td>
-        <td>false</td>
+        <td>true</td>
         <td></td>
       </tr><tr>
         <td><b>additionalConfig</b></td>
@@ -199,6 +199,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>Default image repository to use</td>
         <td></td>
         <td></td>
+      </tr><tr>
+        <td><b>DisableSSL</b></td>
+        <td>bool</td>
+        <td>Disable SSL for the cluster (uses HTTP instead of HTTPS)</td>
+        <td>false</td>
+        <td>false</td>
       </tr><tr>
         <td><b>keystore</b></td>
         <td>[]opsterv1.KeystoreValue</td>
@@ -300,6 +306,13 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td><b>pluginsList</b></td>
         <td>[]string</td>
         <td>List of plugins that should be installed for OpenSearch at startup in the boostrap pod</td>
+        <td>false</td>
+        <td> [] </td>
+      </tr>
+       </tr><tr>
+        <td><b>initContainers</b></td>
+        <td>[]corev1.Container</td>
+        <td>List of init containers that should be added to the bootstrap pod</td>
         <td>false</td>
         <td> [] </td>
       </tr>
@@ -551,6 +564,13 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>false</td>
         <td>-</td>
       </tr>
+       </tr><tr>
+        <td><b>initContainers</b></td>
+        <td>[]corev1.Container</td>
+        <td>List of init containers that should be added to the nodepool pods</td>
+        <td>false</td>
+        <td> [] </td>
+      </tr>
 </table>
 
 <h3 id="InitHelperConfig">
@@ -786,6 +806,13 @@ AdditionalVolume object define additional volume and volumeMount
       <td><b>projected</b></td>
       <td>corev1.ProjectedVolumeSource</td>
       <td>Defines the Projected object to be mounted</td>
+      <td>false</td>
+      <td>-</td>
+    </tr>
+    </tr><tr>
+      <td><b>persistentVolumeClaim</b></td>
+      <td>corev1.PersistentVolumeClaimVolumeSource</td>
+      <td>Defines the PersistentVolumeClaim object to be mounted</td>
       <td>false</td>
       <td>-</td>
     </tr>
