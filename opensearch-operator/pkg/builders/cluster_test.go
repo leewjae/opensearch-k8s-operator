@@ -3,8 +3,9 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"os"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -240,6 +241,17 @@ var _ = Describe("Builders", func() {
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
 
+		It("should use operatorClusterURL when provided", func() {
+			customHost := "opensearch.example.com"
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.OperatorClusterURL = &customHost
+
+			actualUrl := URLForCluster(&clusterObject)
+			// When HttpPort is 0 (default), ClusterURL should default to 9200
+			expectedUrl := fmt.Sprintf("https://%s:9200", customHost)
+			Expect(actualUrl).To(Equal(expectedUrl))
+		})
+
 		It("should properly setup the main command when installing plugins", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			pluginA := "some-plugin"
@@ -279,7 +291,7 @@ var _ = Describe("Builders", func() {
 
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
-				Value: "-Xmx512M -Xms512M -Dopensearch.experimental.feature.searchable_snapshot.enabled=true -Dopensearch.transport.cname_in_publish_address=true",
+				Value: "-Xms512M -Xmx512M -Dopensearch.experimental.feature.searchable_snapshot.enabled=true -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
 
@@ -297,7 +309,7 @@ var _ = Describe("Builders", func() {
 
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
-				Value: "-Xmx512M -Xms512M -Dopensearch.transport.cname_in_publish_address=true",
+				Value: "-Xms512M -Xmx512M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
 
@@ -409,7 +421,7 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
-				Value: "-Xmx1024M -Xms1024M -Dopensearch.transport.cname_in_publish_address=true",
+				Value: "-Xms1024M -Xmx1024M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
 		It("should set jvm to half of memory request when memory request is fraction and jvm are not provided", func() {
@@ -424,7 +436,7 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
-				Value: "-Xmx768M -Xms768M -Dopensearch.transport.cname_in_publish_address=true",
+				Value: "-Xms768M -Xmx768M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
 
@@ -440,7 +452,7 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
-				Value: "-Xmx953M -Xms953M -Dopensearch.transport.cname_in_publish_address=true",
+				Value: "-Xms953M -Xmx953M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
 		It("should set jvm to default when memory request and jvm are not provided", func() {
@@ -449,24 +461,24 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
-				Value: "-Xmx512M -Xms512M -Dopensearch.transport.cname_in_publish_address=true",
+				Value: "-Xms512M -Xmx512M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
 		It("should set NodePool.Jvm as jvm when it jvm is provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
-				Jvm: "-Xmx1024M -Xms1024M",
+				Jvm: "-Xms1024M -Xmx1024M",
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
-				Value: "-Xmx1024M -Xms1024M -Dopensearch.transport.cname_in_publish_address=true",
+				Value: "-Xms1024M -Xmx1024M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
 		It("should set NodePool.jvm as jvm when jvm and memory request are provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
-				Jvm: "-Xmx1024M -Xms1024M",
+				Jvm: "-Xms1024M -Xmx1024M",
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceMemory: resource.MustParse("4Gi"),
@@ -476,8 +488,96 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
-				Value: "-Xmx1024M -Xms1024M -Dopensearch.transport.cname_in_publish_address=true",
+				Value: "-Xms1024M -Xmx1024M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
+		})
+
+		It("should include sidecar containers when specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				SidecarContainers: []corev1.Container{
+					{
+						Name:  "log-shipper",
+						Image: "fluent/fluent-bit:latest",
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceMemory: resource.MustParse("64Mi"),
+								corev1.ResourceCPU:    resource.MustParse("100m"),
+							},
+						},
+					},
+					{
+						Name:  "metrics-collector",
+						Image: "prom/node-exporter:latest",
+						Ports: []corev1.ContainerPort{
+							{
+								Name:          "metrics",
+								ContainerPort: 9100,
+								Protocol:      "TCP",
+							},
+						},
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+
+			// Should have 3 containers total: 1 main OpenSearch + 2 additional
+			Expect(len(result.Spec.Template.Spec.Containers)).To(Equal(3))
+
+			// First container should be the main OpenSearch container
+			Expect(result.Spec.Template.Spec.Containers[0].Name).To(Equal("opensearch"))
+
+			// Second container should be the first additional container
+			Expect(result.Spec.Template.Spec.Containers[1].Name).To(Equal("log-shipper"))
+			Expect(result.Spec.Template.Spec.Containers[1].Image).To(Equal("fluent/fluent-bit:latest"))
+			Expect(result.Spec.Template.Spec.Containers[1].Resources.Requests[corev1.ResourceMemory]).To(Equal(resource.MustParse("64Mi")))
+			Expect(result.Spec.Template.Spec.Containers[1].Resources.Requests[corev1.ResourceCPU]).To(Equal(resource.MustParse("100m")))
+
+			// Third container should be the second additional container
+			Expect(result.Spec.Template.Spec.Containers[2].Name).To(Equal("metrics-collector"))
+			Expect(result.Spec.Template.Spec.Containers[2].Image).To(Equal("prom/node-exporter:latest"))
+			Expect(len(result.Spec.Template.Spec.Containers[2].Ports)).To(Equal(1))
+			Expect(result.Spec.Template.Spec.Containers[2].Ports[0].Name).To(Equal("metrics"))
+			Expect(result.Spec.Template.Spec.Containers[2].Ports[0].ContainerPort).To(Equal(int32(9100)))
+		})
+		It("should include custom init containers that run before main container", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			initContainer := corev1.Container{
+				Name:  "custom-init",
+				Image: "custom-init:latest",
+			}
+			nodePool := opsterv1.NodePool{
+				InitContainers: []corev1.Container{initContainer},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.InitContainers).To(ContainElement(corev1.Container{
+				Name:  "custom-init",
+				Image: "custom-init:latest",
+			}))
+			for _, container := range result.Spec.Template.Spec.Containers {
+				Expect(container.Name).NotTo(Equal("custom-init"))
+			}
+		})
+
+		It("should include multiple custom init containers when specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			initContainer1 := corev1.Container{
+				Name:  "custom-init1",
+				Image: "custom-init1:latest",
+			}
+			initContainer2 := corev1.Container{
+				Name:  "custom-init2",
+				Image: "custom-init2:latest",
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
+				Roles:          []string{"cluster_manager"},
+				InitContainers: []corev1.Container{initContainer1, initContainer2},
+			}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(3))
+			Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("custom-init1"))
+			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init2"))
 		})
 	})
 
@@ -582,6 +682,49 @@ var _ = Describe("Builders", func() {
 			Expect(expected).To(Equal(actual))
 		})
 
+		It("should inherit General.PluginsList when Bootstrap.PluginsList is not set", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			pluginA := "repository-s3"
+			pluginB := "analysis-icu"
+
+			clusterObject.Spec.General.PluginsList = []string{pluginA, pluginB}
+			// Bootstrap.PluginsList is not set
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			actual := result.Spec.Containers[0].Command
+			Expect(len(actual)).To(Equal(3))
+			Expect(actual[2]).To(ContainSubstring(pluginA))
+			Expect(actual[2]).To(ContainSubstring(pluginB))
+		})
+
+		It("should override General.PluginsList with Bootstrap.PluginsList when explicitly set", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			generalPlugin := "repository-s3"
+			bootstrapPluginA := "custom-plugin-a"
+			bootstrapPluginB := "custom-plugin-b"
+
+			clusterObject.Spec.General.PluginsList = []string{generalPlugin}
+			clusterObject.Spec.Bootstrap.PluginsList = []string{bootstrapPluginA, bootstrapPluginB}
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			// Should use Bootstrap.PluginsList, not General.PluginsList
+			actual := result.Spec.Containers[0].Command
+			Expect(len(actual)).To(Equal(3))
+			Expect(actual[2]).To(ContainSubstring(bootstrapPluginA))
+			Expect(actual[2]).To(ContainSubstring(bootstrapPluginB))
+			Expect(actual[2]).NotTo(ContainSubstring(generalPlugin))
+		})
+
+		It("should use no plugins when both General.PluginsList and Bootstrap.PluginsList are empty", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			// Neither list is set
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			actual := result.Spec.Containers[0].Command
+			Expect(len(actual)).To(Equal(3))
+			Expect(actual[2]).To(Equal("./opensearch-docker-entrypoint.sh"))
+		})
+
 		It("should use PVC for data volume instead of emptyDir", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewBootstrapPod(&clusterObject, nil, nil)
@@ -646,6 +789,71 @@ var _ = Describe("Builders", func() {
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
 			}))
+		})
+		When("Constructing a bootstrap pod with Volumes", func() {
+			It("should include all the required volumes and mounts", func() {
+				clusterObject := opsterv1.OpenSearchCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cluster",
+						Namespace: "test-namespace",
+					},
+					Spec: opsterv1.ClusterSpec{
+						General: opsterv1.GeneralConfig{
+							PluginsList: []string{"repository-s3"},
+						},
+					},
+				}
+
+				// Create the volumes that would come from the configuration reconciler
+				volumes := []corev1.Volume{
+					{
+						Name: "rw-conf",
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
+						},
+					},
+					{
+						Name: "rw-logs",
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
+						},
+					},
+					{
+						Name: "rw-plugins",
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
+						},
+					},
+				}
+
+				volumeMounts := []corev1.VolumeMount{
+					{
+						Name:      "rw-conf",
+						MountPath: "/usr/share/opensearch/conf",
+					},
+					{
+						Name:      "rw-logs",
+						MountPath: "/usr/share/opensearch/logs",
+					},
+					{
+						Name:      "rw-plugins",
+						MountPath: "/usr/share/opensearch/plugins",
+					},
+				}
+
+				result := NewBootstrapPod(&clusterObject, volumes, volumeMounts)
+
+				Expect(len(result.Spec.Volumes)).To(Equal(4))
+				Expect(result.Spec.Volumes[0].Name).To(Equal(volumes[0].Name))
+				Expect(result.Spec.Volumes[1].Name).To(Equal(volumes[1].Name))
+				Expect(result.Spec.Volumes[2].Name).To(Equal(volumes[2].Name))
+
+				Expect(len(result.Spec.Containers)).To(Equal(1))
+				Expect(len(result.Spec.Containers[0].VolumeMounts)).To(Equal(4))
+				Expect(result.Spec.Containers[0].VolumeMounts[0].Name).To(Equal(volumeMounts[0].Name))
+				Expect(result.Spec.Containers[0].VolumeMounts[1].Name).To(Equal(volumeMounts[1].Name))
+				Expect(result.Spec.Containers[0].VolumeMounts[2].Name).To(Equal(volumeMounts[2].Name))
+			})
 		})
 	})
 
@@ -1045,6 +1253,46 @@ var _ = Describe("Builders", func() {
 				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
 				To(Equal([]string{"/bin/bash", "-c", "echo 'ready'"}))
+		})
+	})
+
+	When("DisableSSL is enabled", func() {
+		It("should use http protocol in URLForCluster", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Spec.General.DisableSSL = true
+			clusterObject.Spec.General.ServiceName = "opensearch"
+			clusterObject.Namespace = "default"
+			clusterObject.Spec.General.HttpPort = 9200
+
+			actualUrl := URLForCluster(&clusterObject)
+			Expect(actualUrl).To(ContainSubstring("http://"))
+			Expect(actualUrl).NotTo(ContainSubstring("https://"))
+		})
+
+		It("should use http protocol in probe commands", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Spec.General.DisableSSL = true
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
+		})
+
+		It("should use http scheme in ServiceMonitor", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Name = "test-cluster"
+			clusterObject.Namespace = "default"
+			clusterObject.Spec.General.DisableSSL = true
+			clusterObject.Spec.General.Monitoring.Enable = true
+			clusterObject.Spec.General.Monitoring.ScrapeInterval = "30s"
+
+			result := NewServiceMonitor(&clusterObject)
+			Expect(result.Spec.Endpoints[0].Scheme).To(Equal("http"))
 		})
 	})
 

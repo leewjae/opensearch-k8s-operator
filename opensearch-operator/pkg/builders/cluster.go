@@ -3,13 +3,15 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"strings"
+
+	"k8s.io/utils/ptr"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -76,7 +78,18 @@ func NewSTSForNodePool(
 	if node.Persistence == nil || node.Persistence.PVC != nil {
 		mode := corev1.PersistentVolumeFilesystem
 		pvc = corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{Name: "data"},
+			ObjectMeta: func() metav1.ObjectMeta {
+				if node.Persistence == nil {
+					return metav1.ObjectMeta{
+						Name: "data",
+					}
+				}
+				return metav1.ObjectMeta{
+					Name:        "data",
+					Annotations: node.Persistence.PVC.Annotations,
+					Labels:      node.Persistence.PVC.Labels,
+				}
+			}(),
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes: func() []corev1.PersistentVolumeAccessMode {
 					if node.Persistence == nil {
@@ -165,7 +178,8 @@ func NewSTSForNodePool(
 		// vendor ="elasticsearch"
 	}
 
-	jvm := helpers.CalculateJvmHeapSize(&node)
+	jvmHeapSizeSettings := helpers.CalculateJvmHeapSizeSettings(node.Resources.Requests.Memory())
+	jvm := helpers.AppendJvmHeapSizeSettings(node.Jvm, jvmHeapSizeSettings)
 
 	// If node role `search` defined add required experimental flag if version less than 2.7
 	if helpers.ContainsString(selectedRoles, "search") && helpers.CompareVersions(cr.Spec.General.Version, "2.7.0") {
@@ -180,10 +194,14 @@ func NewSTSForNodePool(
 	startupProbeFailureThreshold := int32(10) // 30s * 10 = 5m time to wait for startup
 	startupProbeSuccessThreshold := int32(1)
 	startupProbeInitialDelaySeconds := int32(10)
+	probeProtocol := "https"
+	if cr.Spec.General.DisableSSL {
+		probeProtocol = "http"
+	}
 	startupProbeCommand := []string{
 		"/bin/bash",
 		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:%d'", PortForCluster(cr)),
+		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail '%s://localhost:%d'", probeProtocol, PortForCluster(cr)),
 	}
 
 	readinessProbePeriodSeconds := int32(30)
@@ -194,7 +212,7 @@ func NewSTSForNodePool(
 	readinessProbeCommand := []string{
 		"/bin/bash",
 		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:%d'", PortForCluster(cr)),
+		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail '%s://localhost:%d'", probeProtocol, PortForCluster(cr)),
 	}
 
 	livenessProbePeriodSeconds := int32(20)
@@ -353,6 +371,11 @@ func NewSTSForNodePool(
 	securityContext := cr.Spec.General.SecurityContext
 
 	var initContainers []corev1.Container
+
+	if len(node.InitContainers) > 0 {
+		initContainers = append(initContainers, node.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
 		uid, gid := helpers.ResolveUidGid(cr)
 		initContainers = append(initContainers, corev1.Container{
@@ -486,7 +509,7 @@ func NewSTSForNodePool(
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
+					Containers: append([]corev1.Container{
 						{
 							Env: []corev1.EnvVar{
 								{
@@ -544,7 +567,7 @@ func NewSTSForNodePool(
 							VolumeMounts:    volumeMounts,
 							SecurityContext: securityContext,
 						},
-					},
+					}, node.SidecarContainers...),
 					InitContainers:            initContainers,
 					Volumes:                   volumes,
 					ServiceAccountName:        cr.Spec.General.ServiceAccount,
@@ -786,12 +809,8 @@ func NewBootstrapPod(
 	resources := cr.Spec.Bootstrap.Resources
 	containerResources := sanitizeContainerResources(resources)
 
-	var jvm string
-	if cr.Spec.Bootstrap.Jvm == "" {
-		jvm = "-Xmx512M -Xms512M"
-	} else {
-		jvm = cr.Spec.Bootstrap.Jvm
-	}
+	jvmHeapSizeSettings := helpers.CalculateJvmHeapSizeSettings(cr.Spec.Bootstrap.Resources.Requests.Memory())
+	jvm := helpers.AppendJvmHeapSizeSettings(cr.Spec.Bootstrap.Jvm, jvmHeapSizeSettings)
 
 	image := helpers.ResolveImage(cr, nil)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
@@ -876,6 +895,10 @@ func NewBootstrapPod(
 	}
 
 	var initContainers []corev1.Container
+	if len(cr.Spec.Bootstrap.InitContainers) > 0 {
+		initContainers = append(initContainers, cr.Spec.Bootstrap.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
 		uid, gid := helpers.ResolveUidGid(cr)
 		initContainers = append(initContainers, corev1.Container{
@@ -989,7 +1012,12 @@ func NewBootstrapPod(
 
 	startUpCommand := "./opensearch-docker-entrypoint.sh"
 
-	pluginslist := helpers.RemoveDuplicateStrings(cr.Spec.Bootstrap.PluginsList)
+	// Use General.PluginsList by default, override with Bootstrap.PluginsList if set
+	pluginslist := cr.Spec.General.PluginsList
+	if len(cr.Spec.Bootstrap.PluginsList) > 0 {
+		pluginslist = cr.Spec.Bootstrap.PluginsList
+	}
+	pluginslist = helpers.RemoveDuplicateStrings(pluginslist)
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", pluginslist, true, startUpCommand)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1063,8 +1091,7 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 }
 
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
-	httpPort := PortForCluster(cr)
-	return fmt.Sprintf("https://%s.svc.%s:%d", DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
+	return helpers.ClusterURL(cr)
 }
 
 func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {
@@ -1196,11 +1223,23 @@ func NewSecurityconfigUpdateJob(
 	podSecurityContext := instance.Spec.General.PodSecurityContext
 	resources := instance.Spec.Security.GetConfig().GetUpdateJob().Resources
 	return batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        jobName,
+			Namespace:   namespace,
+			Annotations: annotations,
+			Labels: map[string]string{
+				helpers.JobLabel: jobName,
+			},
+		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Name: jobName},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: jobName,
+					Labels: map[string]string{
+						helpers.JobLabel: jobName,
+					},
+				},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 					Containers: []corev1.Container{{
@@ -1225,6 +1264,7 @@ func NewSecurityconfigUpdateJob(
 }
 
 func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) bool {
+	wrappedClient := k8s.NewK8sClient(k8sClient, ctx)
 	for _, nodePool := range cr.Spec.NodePools {
 		masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
 		if helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole) {
@@ -1235,6 +1275,11 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 			}, sts); err != nil {
 				return false
 			}
+			readyReplicas, err := helpers.ReadyReplicasForNodePool(wrappedClient, cr, &nodePool)
+			if err != nil {
+				return false
+			}
+			sts.Status.ReadyReplicas = readyReplicas
 			if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
 				return false
 			}
@@ -1292,8 +1337,8 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 	var tlsconfig *monitoring.TLSConfig
 	if cr.Spec.General.Monitoring.TLSConfig != nil {
 		safetlsconfig := monitoring.SafeTLSConfig{
-			ServerName:         cr.Spec.General.Monitoring.TLSConfig.ServerName,
-			InsecureSkipVerify: cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify,
+			ServerName:         ptr.To(cr.Spec.General.Monitoring.TLSConfig.ServerName),
+			InsecureSkipVerify: ptr.To(cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify),
 		}
 
 		tlsconfig = &monitoring.TLSConfig{
@@ -1308,6 +1353,11 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 	}
 	for k, v := range cr.Spec.General.Monitoring.Labels {
 		monitorLabel[k] = v
+	}
+
+	scheme := "https"
+	if cr.Spec.General.DisableSSL {
+		scheme = "http"
 	}
 
 	return &monitoring.ServiceMonitor{
@@ -1334,7 +1384,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 					BearerTokenFile: "",
 					HonorLabels:     false,
 					BasicAuth:       &user,
-					Scheme:          "https",
+					Scheme:          scheme,
 				},
 			},
 			Selector:          selector,
