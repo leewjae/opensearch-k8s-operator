@@ -78,25 +78,31 @@ var _ = Describe("Builders", func() {
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
-			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+			// Should have 2 init containers: "init" (chmod/chown) and "init-sysctl"
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(2))
 		})
 		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
 			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
-			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
+			// Should have 1 init container: "init-sysctl" (SKIP_INIT_CONTAINER only skips "init", not "init-sysctl")
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+			Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("init-sysctl"))
 			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(len(result.Spec.InitContainers)).To(Equal(1))
+			// Should have 2 init containers: "init" (chmod/chown) and "init-sysctl"
+			Expect(len(result.Spec.InitContainers)).To(Equal(2))
 		})
 		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
 			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(len(result.Spec.InitContainers)).To(Equal(0))
+			// Should have 1 init container: "init-sysctl" (SKIP_INIT_CONTAINER only skips "init", not "init-sysctl")
+			Expect(len(result.Spec.InitContainers)).To(Equal(1))
+			Expect(result.Spec.InitContainers[0].Name).To(Equal("init-sysctl"))
 			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
 
@@ -820,7 +826,16 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithBootstrapKeystoreSecret(mockSecretName, nil)
 
 			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(result.Spec.InitContainers[1].VolumeMounts).To(ContainElements([]corev1.VolumeMount{
+			// Find the keystore init container by name (init containers: "init", "keystore", "init-sysctl")
+			var keystoreContainer *corev1.Container
+			for i := range result.Spec.InitContainers {
+				if result.Spec.InitContainers[i].Name == "keystore" {
+					keystoreContainer = &result.Spec.InitContainers[i]
+					break
+				}
+			}
+			Expect(keystoreContainer).ToNot(BeNil())
+			Expect(keystoreContainer.VolumeMounts).To(ContainElements([]corev1.VolumeMount{
 				{
 					Name:      "keystore",
 					MountPath: "/tmp/keystore",
@@ -853,7 +868,16 @@ var _ = Describe("Builders", func() {
 			}
 			clusterObject := ClusterDescWithBootstrapKeystoreSecret(mockSecretName, keyMappings)
 			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(result.Spec.InitContainers[1].VolumeMounts).To(ContainElement(corev1.VolumeMount{
+			// Find the keystore init container by name
+			var keystoreContainer *corev1.Container
+			for i := range result.Spec.InitContainers {
+				if result.Spec.InitContainers[i].Name == "keystore" {
+					keystoreContainer = &result.Spec.InitContainers[i]
+					break
+				}
+			}
+			Expect(keystoreContainer).ToNot(BeNil())
+			Expect(keystoreContainer.VolumeMounts).To(ContainElement(corev1.VolumeMount{
 				Name:      "keystore-" + mockSecretName,
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
@@ -968,7 +992,16 @@ var _ = Describe("Builders", func() {
 			}
 
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
-			Expect(result.Spec.Template.Spec.InitContainers[1].VolumeMounts).To(ContainElements([]corev1.VolumeMount{
+			// Find the keystore init container by name (init containers: "init", "keystore", "init-sysctl")
+			var keystoreContainer *corev1.Container
+			for i := range result.Spec.Template.Spec.InitContainers {
+				if result.Spec.Template.Spec.InitContainers[i].Name == "keystore" {
+					keystoreContainer = &result.Spec.Template.Spec.InitContainers[i]
+					break
+				}
+			}
+			Expect(keystoreContainer).ToNot(BeNil())
+			Expect(keystoreContainer.VolumeMounts).To(ContainElements([]corev1.VolumeMount{
 				{
 					Name:      "keystore",
 					MountPath: "/tmp/keystore",
@@ -1009,7 +1042,16 @@ var _ = Describe("Builders", func() {
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
-			Expect(result.Spec.Template.Spec.InitContainers[1].VolumeMounts).To(ContainElement(corev1.VolumeMount{
+			// Find the keystore init container by name
+			var keystoreContainer *corev1.Container
+			for i := range result.Spec.Template.Spec.InitContainers {
+				if result.Spec.Template.Spec.InitContainers[i].Name == "keystore" {
+					keystoreContainer = &result.Spec.Template.Spec.InitContainers[i]
+					break
+				}
+			}
+			Expect(keystoreContainer).ToNot(BeNil())
+			Expect(keystoreContainer.VolumeMounts).To(ContainElement(corev1.VolumeMount{
 				Name:      "keystore-" + mockSecretName,
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
