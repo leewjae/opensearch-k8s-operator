@@ -99,6 +99,75 @@ var _ = Describe("Builders", func() {
 			Expect(len(result.Spec.InitContainers)).To(Equal(0))
 			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
+
+	// Tests for SetVMMaxMapCount pointer behavior
+	It("should include init-sysctl container when SetVMMaxMapCount is nil (default true)", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		// SetVMMaxMapCount is nil by default
+		result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+
+		// Should have 1 init container (init-sysctl)
+		Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+		Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("init-sysctl"))
+		Expect(result.Spec.Template.Spec.InitContainers[0].Command).To(Equal([]string{
+			"sysctl",
+			"-w",
+			"vm.max_map_count=262144",
+		}))
+	})
+
+	It("should include init-sysctl container when SetVMMaxMapCount is explicitly true", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(true)
+		result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+
+		// Should have 1 init container (init-sysctl)
+		Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+		Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("init-sysctl"))
+	})
+
+	It("should NOT include init-sysctl container when SetVMMaxMapCount is explicitly false", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(false)
+		result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+
+		// Should have 0 init containers
+		Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
+	})
+
+	It("should include init-sysctl container in bootstrap pod when SetVMMaxMapCount is nil (default true)", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		// SetVMMaxMapCount is nil by default
+		result := NewBootstrapPod(&clusterObject, nil, nil)
+
+		// Should have 1 init container (init-sysctl)
+		Expect(len(result.Spec.InitContainers)).To(Equal(1))
+		Expect(result.Spec.InitContainers[0].Name).To(Equal("init-sysctl"))
+		Expect(result.Spec.InitContainers[0].Command).To(Equal([]string{
+			"sysctl",
+			"-w",
+			"vm.max_map_count=262144",
+		}))
+	})
+
+	It("should include init-sysctl container in bootstrap pod when SetVMMaxMapCount is explicitly true", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(true)
+		result := NewBootstrapPod(&clusterObject, nil, nil)
+
+		// Should have 1 init container (init-sysctl)
+		Expect(len(result.Spec.InitContainers)).To(Equal(1))
+		Expect(result.Spec.InitContainers[0].Name).To(Equal("init-sysctl"))
+	})
+
+	It("should NOT include init-sysctl container in bootstrap pod when SetVMMaxMapCount is explicitly false", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(false)
+		result := NewBootstrapPod(&clusterObject, nil, nil)
+
+		// Should have 0 init containers
+		Expect(len(result.Spec.InitContainers)).To(Equal(0))
+	})
 		It("should only use valid roles", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
