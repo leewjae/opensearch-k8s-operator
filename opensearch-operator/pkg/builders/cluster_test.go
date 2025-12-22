@@ -78,27 +78,142 @@ var _ = Describe("Builders", func() {
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
-			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+			// Should have 2 init containers: "init" (chmod/chown) and "init-sysctl"
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(2))
 		})
 		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
 			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
-			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
+			// Should have 1 init container: "init-sysctl" (SKIP_INIT_CONTAINER only skips "init", not "init-sysctl")
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+			Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("init-sysctl"))
 			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(len(result.Spec.InitContainers)).To(Equal(1))
+			// Should have 2 init containers: "init" (chmod/chown) and "init-sysctl"
+			Expect(len(result.Spec.InitContainers)).To(Equal(2))
 		})
 		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
 			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(len(result.Spec.InitContainers)).To(Equal(0))
+			// Should have 1 init container: "init-sysctl" (SKIP_INIT_CONTAINER only skips "init", not "init-sysctl")
+			Expect(len(result.Spec.InitContainers)).To(Equal(1))
+			Expect(result.Spec.InitContainers[0].Name).To(Equal("init-sysctl"))
 			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
+
+	// Tests for SetVMMaxMapCount pointer behavior
+	It("should include init-sysctl container when SetVMMaxMapCount is nil (default true)", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		// SetVMMaxMapCount is nil by default
+		result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+
+		// Should have 2 init containers: "init" (chmod/chown) and "init-sysctl"
+		Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(2))
+		// Find and verify the init-sysctl container
+		var initSysctlContainer *corev1.Container
+		for i := range result.Spec.Template.Spec.InitContainers {
+			if result.Spec.Template.Spec.InitContainers[i].Name == "init-sysctl" {
+				initSysctlContainer = &result.Spec.Template.Spec.InitContainers[i]
+				break
+			}
+		}
+		Expect(initSysctlContainer).ToNot(BeNil())
+		Expect(initSysctlContainer.Command).To(Equal([]string{
+			"sysctl",
+			"-w",
+			"vm.max_map_count=262144",
+		}))
+	})
+
+	It("should include init-sysctl container when SetVMMaxMapCount is explicitly true", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(true)
+		result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+
+		// Should have 2 init containers: "init" and "init-sysctl"
+		Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(2))
+		// Verify init-sysctl container exists
+		var hasInitSysctl bool
+		for i := range result.Spec.Template.Spec.InitContainers {
+			if result.Spec.Template.Spec.InitContainers[i].Name == "init-sysctl" {
+				hasInitSysctl = true
+				break
+			}
+		}
+		Expect(hasInitSysctl).To(BeTrue())
+	})
+
+	It("should NOT include init-sysctl container when SetVMMaxMapCount is explicitly false", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(false)
+		result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+
+		// Should have 1 init container: only "init" (chmod/chown), no "init-sysctl"
+		Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+		// Verify init-sysctl container does NOT exist
+		for i := range result.Spec.Template.Spec.InitContainers {
+			Expect(result.Spec.Template.Spec.InitContainers[i].Name).ToNot(Equal("init-sysctl"))
+		}
+	})
+
+	It("should include init-sysctl container in bootstrap pod when SetVMMaxMapCount is nil (default true)", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		// SetVMMaxMapCount is nil by default
+		result := NewBootstrapPod(&clusterObject, nil, nil)
+
+		// Should have 2 init containers: "init" and "init-sysctl"
+		Expect(len(result.Spec.InitContainers)).To(Equal(2))
+		// Find and verify the init-sysctl container
+		var initSysctlContainer *corev1.Container
+		for i := range result.Spec.InitContainers {
+			if result.Spec.InitContainers[i].Name == "init-sysctl" {
+				initSysctlContainer = &result.Spec.InitContainers[i]
+				break
+			}
+		}
+		Expect(initSysctlContainer).ToNot(BeNil())
+		Expect(initSysctlContainer.Command).To(Equal([]string{
+			"sysctl",
+			"-w",
+			"vm.max_map_count=262144",
+		}))
+	})
+
+	It("should include init-sysctl container in bootstrap pod when SetVMMaxMapCount is explicitly true", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(true)
+		result := NewBootstrapPod(&clusterObject, nil, nil)
+
+		// Should have 2 init containers: "init" and "init-sysctl"
+		Expect(len(result.Spec.InitContainers)).To(Equal(2))
+		// Verify init-sysctl container exists
+		var hasInitSysctl bool
+		for i := range result.Spec.InitContainers {
+			if result.Spec.InitContainers[i].Name == "init-sysctl" {
+				hasInitSysctl = true
+				break
+			}
+		}
+		Expect(hasInitSysctl).To(BeTrue())
+	})
+
+	It("should NOT include init-sysctl container in bootstrap pod when SetVMMaxMapCount is explicitly false", func() {
+		clusterObject := ClusterDescWithVersion("2.2.1")
+		clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(false)
+		result := NewBootstrapPod(&clusterObject, nil, nil)
+
+		// Should have 1 init container: only "init" (chmod/chown), no "init-sysctl"
+		Expect(len(result.Spec.InitContainers)).To(Equal(1))
+		// Verify init-sysctl container does NOT exist
+		for i := range result.Spec.InitContainers {
+			Expect(result.Spec.InitContainers[i].Name).ToNot(Equal("init-sysctl"))
+		}
+	})
 		It("should only use valid roles", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
@@ -575,7 +690,8 @@ var _ = Describe("Builders", func() {
 				Roles:          []string{"cluster_manager"},
 				InitContainers: []corev1.Container{initContainer1, initContainer2},
 			}, "foobar", nil, nil, nil)
-			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(3))
+			// Should have 4 init containers: custom-init1, custom-init2, "init" (chmod/chown), "init-sysctl"
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(4))
 			Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("custom-init1"))
 			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init2"))
 		})
@@ -751,7 +867,16 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithBootstrapKeystoreSecret(mockSecretName, nil)
 
 			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(result.Spec.InitContainers[1].VolumeMounts).To(ContainElements([]corev1.VolumeMount{
+			// Find the keystore init container by name (init containers: "init", "keystore", "init-sysctl")
+			var keystoreContainer *corev1.Container
+			for i := range result.Spec.InitContainers {
+				if result.Spec.InitContainers[i].Name == "keystore" {
+					keystoreContainer = &result.Spec.InitContainers[i]
+					break
+				}
+			}
+			Expect(keystoreContainer).ToNot(BeNil())
+			Expect(keystoreContainer.VolumeMounts).To(ContainElements([]corev1.VolumeMount{
 				{
 					Name:      "keystore",
 					MountPath: "/tmp/keystore",
@@ -784,7 +909,16 @@ var _ = Describe("Builders", func() {
 			}
 			clusterObject := ClusterDescWithBootstrapKeystoreSecret(mockSecretName, keyMappings)
 			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(result.Spec.InitContainers[1].VolumeMounts).To(ContainElement(corev1.VolumeMount{
+			// Find the keystore init container by name
+			var keystoreContainer *corev1.Container
+			for i := range result.Spec.InitContainers {
+				if result.Spec.InitContainers[i].Name == "keystore" {
+					keystoreContainer = &result.Spec.InitContainers[i]
+					break
+				}
+			}
+			Expect(keystoreContainer).ToNot(BeNil())
+			Expect(keystoreContainer.VolumeMounts).To(ContainElement(corev1.VolumeMount{
 				Name:      "keystore-" + mockSecretName,
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
@@ -899,7 +1033,16 @@ var _ = Describe("Builders", func() {
 			}
 
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
-			Expect(result.Spec.Template.Spec.InitContainers[1].VolumeMounts).To(ContainElements([]corev1.VolumeMount{
+			// Find the keystore init container by name (init containers: "init", "keystore", "init-sysctl")
+			var keystoreContainer *corev1.Container
+			for i := range result.Spec.Template.Spec.InitContainers {
+				if result.Spec.Template.Spec.InitContainers[i].Name == "keystore" {
+					keystoreContainer = &result.Spec.Template.Spec.InitContainers[i]
+					break
+				}
+			}
+			Expect(keystoreContainer).ToNot(BeNil())
+			Expect(keystoreContainer.VolumeMounts).To(ContainElements([]corev1.VolumeMount{
 				{
 					Name:      "keystore",
 					MountPath: "/tmp/keystore",
@@ -940,7 +1083,16 @@ var _ = Describe("Builders", func() {
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
-			Expect(result.Spec.Template.Spec.InitContainers[1].VolumeMounts).To(ContainElement(corev1.VolumeMount{
+			// Find the keystore init container by name
+			var keystoreContainer *corev1.Container
+			for i := range result.Spec.Template.Spec.InitContainers {
+				if result.Spec.Template.Spec.InitContainers[i].Name == "keystore" {
+					keystoreContainer = &result.Spec.Template.Spec.InitContainers[i]
+					break
+				}
+			}
+			Expect(keystoreContainer).ToNot(BeNil())
+			Expect(keystoreContainer.VolumeMounts).To(ContainElement(corev1.VolumeMount{
 				Name:      "keystore-" + mockSecretName,
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,

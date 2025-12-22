@@ -601,7 +601,9 @@ func NewSTSForNodePool(
 	// Append additional env vars from cr.Spec.NodePool.env
 	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, node.Env...)
 
-	if cr.Spec.General.SetVMMaxMapCount {
+	// Add init container to set vm.max_map_count unless explicitly disabled
+	// (SetVMMaxMapCount defaults to true when nil)
+	if cr.Spec.General.SetVMMaxMapCount == nil || *cr.Spec.General.SetVMMaxMapCount {
 		initHelperImage := helpers.ResolveInitHelperImage(cr)
 
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
@@ -1062,7 +1064,9 @@ func NewBootstrapPod(
 		},
 	}
 
-	if cr.Spec.General.SetVMMaxMapCount {
+	// Add init container to set vm.max_map_count unless explicitly disabled
+	// (SetVMMaxMapCount defaults to true when nil)
+	if cr.Spec.General.SetVMMaxMapCount == nil || *cr.Spec.General.SetVMMaxMapCount {
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
 			Name:            "init-sysctl",
 			Image:           initHelperImage.GetImage(),
