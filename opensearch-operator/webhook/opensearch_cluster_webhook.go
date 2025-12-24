@@ -18,8 +18,10 @@ package webhook
 
 import (
 	"context"
+	"fmt"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,14 +45,117 @@ func (v *OpenSearchClusterValidator) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	return nil, nil
+	cluster := obj.(*opsterv1.OpenSearchCluster)
+	return v.validateTlsConfig(cluster)
 }
 
 func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	cluster := newObj.(*opsterv1.OpenSearchCluster)
+	oldCluster := oldObj.(*opsterv1.OpenSearchCluster)
+	newCluster := newObj.(*opsterv1.OpenSearchCluster)
 
-	if !cluster.DeletionTimestamp.IsZero() {
+	if !newCluster.DeletionTimestamp.IsZero() {
 		return nil, nil
+	}
+
+	// Validate storage class changes - storage class is immutable in StatefulSets
+	if err := v.validateStorageClassChanges(oldCluster, newCluster); err != nil {
+		return nil, err
+	}
+
+	return v.validateTlsConfig(newCluster)
+}
+
+func (v *OpenSearchClusterValidator) validateStorageClassChanges(oldCluster, newCluster *opsterv1.OpenSearchCluster) error {
+	// Create a map of old node pools by component name for easy lookup
+	oldNodePools := make(map[string]*opsterv1.NodePool)
+	for i := range oldCluster.Spec.NodePools {
+		nodePool := &oldCluster.Spec.NodePools[i]
+		oldNodePools[nodePool.Component] = nodePool
+	}
+
+	// Check each new node pool for storage class changes
+	for _, newNodePool := range newCluster.Spec.NodePools {
+		oldNodePool, exists := oldNodePools[newNodePool.Component]
+		if !exists {
+			// New node pool, no validation needed
+			continue
+		}
+
+		// Get old storage class
+		var oldStorageClass *string
+		if oldNodePool.Persistence != nil && oldNodePool.Persistence.PVC != nil {
+			oldStorageClass = oldNodePool.Persistence.PVC.StorageClassName
+		}
+
+		// Get new storage class
+		var newStorageClass *string
+		if newNodePool.Persistence != nil && newNodePool.Persistence.PVC != nil {
+			newStorageClass = newNodePool.Persistence.PVC.StorageClassName
+		}
+
+		// Compare storage classes (handling nil cases)
+		oldSC := ""
+		if oldStorageClass != nil {
+			oldSC = *oldStorageClass
+		}
+		newSC := ""
+		if newStorageClass != nil {
+			newSC = *newStorageClass
+		}
+
+		// Reject if storage class has changed
+		if oldSC != newSC {
+			return fmt.Errorf("storage class cannot be changed for node pool '%s' (was '%s', attempting to change to '%s'). Storage class is immutable in StatefulSets. Please delete the cluster and recreate it with the new storage class", newNodePool.Component, oldSC, newSC)
+		}
+	}
+
+	return nil
+}
+
+func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opsterv1.OpenSearchCluster) (admission.Warnings, error) {
+	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
+		return nil, nil
+	}
+
+	tlsConfig := cluster.Spec.Security.Tls
+
+	// Validate transport TLS: if enabled=true, transport config must be provided
+	if tlsConfig.Transport != nil && tlsConfig.Transport.Enabled != nil && *tlsConfig.Transport.Enabled {
+		// Transport TLS is explicitly enabled, config is already provided (Transport != nil)
+		// Validation: if enabled=true, we need either Generate=true or existing certs via Secret
+		if !tlsConfig.Transport.Generate && tlsConfig.Transport.Secret.Name == "" {
+			return nil, fmt.Errorf("transport TLS is enabled but neither generate nor secret is provided")
+		}
+	}
+
+	// Validate HTTP TLS: if enabled=true, HTTP config must be provided
+	if tlsConfig.Http != nil && tlsConfig.Http.Enabled != nil && *tlsConfig.Http.Enabled {
+		// HTTP TLS is explicitly enabled, config is already provided (Http != nil)
+		// Validation: if enabled=true, we need either Generate=true or existing certs via Secret
+		if !tlsConfig.Http.Generate && tlsConfig.Http.Secret.Name == "" {
+			return nil, fmt.Errorf("HTTP TLS is enabled but neither generate nor secret is provided")
+		}
+	}
+
+	// Validate admin secret name: if AdminSecret is empty, tls generate should be true.
+	if helpers.IsSecurityPluginEnabled(cluster) {
+		if cluster.Spec.Security.Config != nil && cluster.Spec.Security.Config.AdminSecret.Name != "" {
+			return nil, nil
+		} else {
+			if helpers.SecurityChangeVersion(cluster) {
+				if tlsConfig.Http != nil && tlsConfig.Http.Generate {
+					return nil, nil
+				} else {
+					return nil, fmt.Errorf("admin secret name is not provided but http.tls generate is not true")
+				}
+			} else {
+				if tlsConfig.Transport != nil && tlsConfig.Transport.Generate {
+					return nil, nil
+				} else {
+					return nil, fmt.Errorf("admin secret name is not provided but transport.tls generate is not true")
+				}
+			}
+		}
 	}
 
 	return nil, nil

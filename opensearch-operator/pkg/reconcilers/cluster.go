@@ -17,7 +17,8 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -91,6 +92,18 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, discoveryService, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(discoveryService, reconciler.StatePresent))
 
+	discoverRandomAdminSecret, err := helpers.DiscoverRandomAdminSecret(r.client, r.instance)
+	if err == nil {
+		result.CombineErr(ctrl.SetControllerReference(r.instance, discoverRandomAdminSecret, r.client.Scheme()))
+		result.Combine(r.client.ReconcileResource(discoverRandomAdminSecret, reconciler.StatePresent))
+	}
+
+	discoverRandomContextSecret, err := helpers.DiscoverRandomContextSecret(r.client, r.instance)
+	if err == nil {
+		result.CombineErr(ctrl.SetControllerReference(r.instance, discoverRandomContextSecret, r.client.Scheme()))
+		result.Combine(r.client.ReconcileResource(discoverRandomContextSecret, reconciler.StatePresent))
+	}
+
 	passwordSecret := builders.PasswordSecret(r.instance, username, password)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(passwordSecret, reconciler.StatePresent))
@@ -109,7 +122,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	if r.instance.Status.Initialized {
 		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
 	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StatePresent))
+		result.Combine(r.reconcileBootstrapPod(bootstrapPod))
 	}
 
 	for _, nodePool := range r.instance.Spec.NodePools {
@@ -149,16 +162,52 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}, nil
 	}
 
-	extraConfig := helpers.MergeConfigs(r.instance.Spec.General.AdditionalConfig, nodePool.AdditionalConfig)
+	// Use per-nodepool volumes if this nodepool has AdditionalConfig
+	volumes := r.reconcilerContext.Volumes
+	volumeMounts := r.reconcilerContext.VolumeMounts
+	if len(nodePool.AdditionalConfig) > 0 {
+		// Remove shared config volume and mount (if present) to override with nodepool-specific config
+		filteredVolumes := make([]corev1.Volume, 0, len(volumes))
+		for _, vol := range volumes {
+			if vol.Name != "config" {
+				filteredVolumes = append(filteredVolumes, vol)
+			}
+		}
+		volumes = filteredVolumes
+
+		filteredVolumeMounts := make([]corev1.VolumeMount, 0, len(volumeMounts))
+		for _, mount := range volumeMounts {
+			if mount.Name != "config" {
+				filteredVolumeMounts = append(filteredVolumeMounts, mount)
+			}
+		}
+		volumeMounts = filteredVolumeMounts
+
+		// Add per-nodepool configmap volume (overrides shared config)
+		volumes = append(volumes, corev1.Volume{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: fmt.Sprintf("%s-%s-config", r.instance.Name, nodePool.Component),
+					},
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "config",
+			MountPath: "/usr/share/opensearch/config/opensearch.yml",
+			SubPath:   "opensearch.yml",
+		})
+	}
 
 	sts := builders.NewSTSForNodePool(
 		username,
 		r.instance,
 		nodePool,
 		nodePoolConfig.ConfigHash,
-		r.reconcilerContext.Volumes,
-		r.reconcilerContext.VolumeMounts,
-		extraConfig,
+		volumes,
+		volumeMounts,
 	)
 	if err := ctrl.SetControllerReference(r.instance, sts, r.client.Scheme()); err != nil {
 		return &ctrl.Result{}, err
@@ -180,7 +229,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	// Fix selector.matchLabels (issue #311), need to recreate the STS for it as spec.selector is immutable
 	if _, exists := existing.Spec.Selector.MatchLabels["opensearch.role"]; exists {
 		r.logger.Info(fmt.Sprintf("Deleting statefulset %s while orphaning pods to fix labels", existing.Name))
-		if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
+		if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
 			r.logger.Error(err, "Failed to delete Statefulset for nodePool "+nodePool.Component)
 			return result, err
 		}
@@ -196,7 +245,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		// This logic only works if the STS uses PVCs
 		// First check if the STS already has a readable status (CurrentRevision == "" indicates the STS is newly created and the controller has not yet updated the status properly)
 		if existing.Status.CurrentRevision == "" {
-			new, err := helpers.WaitForSTSStatus(r.client, &existing)
+			new, err := helpers.WaitForSTSStatus(r.ctx, r.client, &existing)
 			if err != nil {
 				return &ctrl.Result{Requeue: true}, err
 			}
@@ -220,7 +269,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 				if existing.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 					// Switch to Parallel to jumpstart the cluster
 					// First delete existing STS
-					if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
+					if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
 						r.logger.Error(err, "Failed to delete STS")
 						return result, err
 					}
@@ -234,14 +283,14 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 						return result, err
 					}
 					// Wait for pods to appear
-					err := helpers.WaitForSTSReplicas(r.client, &existing, nodePool.Replicas)
+					err := helpers.WaitForSTSReplicas(r.ctx, r.client, &existing, nodePool.Replicas)
 					// Abort normal logic and requeue
 					return &ctrl.Result{Requeue: true}, err
 				}
 			} else if existing.Spec.PodManagementPolicy == appsv1.ParallelPodManagement {
 				// We are in Parallel mode but appear to not have a failure situation any longer. Switch back to normal mode
 				r.logger.Info(fmt.Sprintf("Ending recovery mode for nodepool %s", nodePool.Component))
-				if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
+				if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
 					r.logger.Error(err, "Failed to delete STS")
 					return result, err
 				}
@@ -364,7 +413,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 		lg.Info(fmt.Sprintf("Detected failure for cluster with emptyDir %s in ns %s", clusterName, clusterNamespace))
 		lg.Info("Deleting all sts, dashboards and securityconfig job to re-create cluster")
 		for _, nodePool := range r.instance.Spec.NodePools {
-			err := helpers.DeleteSTSForNodePool(r.client, nodePool, clusterName, clusterNamespace)
+			err := helpers.DeleteSTSForNodePool(r.ctx, r.client, nodePool, clusterName, clusterNamespace)
 			if err != nil {
 				lg.Error(err, fmt.Sprintf("Failed to delete sts for nodePool %s", nodePool.Component))
 				return &ctrl.Result{Requeue: true}, err
@@ -373,7 +422,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 
 		// Also Delete Dashboards deployment so .kibana index can be recreated when cluster is started again
 		if r.instance.Spec.Dashboards.Enable {
-			err := helpers.DeleteDashboardsDeployment(r.client, clusterName, clusterNamespace)
+			err := helpers.DeleteDashboardsDeployment(r.ctx, r.client, clusterName, clusterNamespace)
 			if err != nil {
 				lg.Error(err, "Failed to delete OSD pod")
 				return &ctrl.Result{Requeue: true}, err
@@ -431,8 +480,10 @@ func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result
 }
 
 func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opsterv1.NodePool) error {
-	if nodePool.DiskSize == "" { // Default case
-		nodePool.DiskSize = builders.DefaultDiskSize
+	// Use default if DiskSize is zero (not set)
+	nodePoolDiskSize := nodePool.DiskSize
+	if nodePoolDiskSize.IsZero() {
+		nodePoolDiskSize = builders.DefaultDiskSize
 	}
 
 	// If we are changing from ephemeral storage to persistent
@@ -445,11 +496,6 @@ func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nod
 	}
 
 	existingDisk := lo.FromPtr(existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage())
-	nodePoolDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
-	if err != nil {
-		r.logger.Error(err, fmt.Sprintf("Invalid diskSize '%s' for nodepool %s", nodePool.DiskSize, nodePool.Component))
-		return err
-	}
 
 	if existingDisk.Equal(nodePoolDiskSize) {
 		return nil
@@ -504,4 +550,57 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 		instance.Status.Health = health
 		instance.Status.AvailableNodes = availableNodes
 	})
+}
+
+// reconcileBootstrapPod handles bootstrap pod reconciliation with recreation for any changes
+func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl.Result, error) {
+	// Check if bootstrap pod exists
+	existingPod, err := r.client.GetPod(desiredPod.Name, desiredPod.Namespace)
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return &ctrl.Result{}, err
+	}
+
+	if k8serrors.IsNotFound(err) {
+		// Pod doesn't exist, create it
+		r.logger.Info("Creating bootstrap pod", "pod", desiredPod.Name)
+		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
+	}
+
+	updatePod := desiredPod.DeepCopy()
+	if _, err := r.client.ReconcileResource(updatePod, reconciler.StatePresent); err != nil {
+		if isImmutablePodUpdateErr(err) {
+			r.logger.Info("Bootstrap pod update touched immutable fields, recreating pod", "pod", desiredPod.Name)
+			return r.recreateBootstrapPod(&existingPod, desiredPod)
+		}
+		r.logger.Error(err, "Failed to update bootstrap pod", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+
+	return &ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {
+	if err := r.client.DeletePod(existingPod); err != nil {
+		r.logger.Error(err, "Failed to delete existing bootstrap pod", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+	if err := r.client.WaitForPodDeletion(desiredPod.Name, desiredPod.Namespace); err != nil {
+		r.logger.Error(err, "Timeout waiting for bootstrap pod deletion", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+
+	r.logger.Info("Creating new bootstrap pod with updated spec", "pod", desiredPod.Name)
+	return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
+}
+
+func isImmutablePodUpdateErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if statusErr, ok := err.(*k8serrors.StatusError); ok {
+		if statusErr.ErrStatus.Reason == metav1.StatusReasonInvalid && strings.Contains(statusErr.ErrStatus.Message, "pod updates may not change") {
+			return true
+		}
+	}
+	return strings.Contains(err.Error(), "pod updates may not change")
 }

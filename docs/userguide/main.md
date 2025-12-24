@@ -194,7 +194,9 @@ nodePools:
       some.other.config: foobar
 ```
 
-Using `spec.general.additionalConfig` you can add settings to all nodes, using `nodePools[].additionalConfig` you can add settings to only a pool of nodes. The settings must be provided as a map of strings, so use the flat form of any setting. If the value you want to provide is not a string, put it in quotes (for example `"true"` or `"1234"`). The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`. The value of `spec.general.additionalConfig` is also used for configuring the bootstrap pod. To overwrite the values of the bootstrap pod, set the field `spec.bootstrap.additionalConfig`.
+Using `spec.general.additionalConfig` you can add settings that will be applied to all nodes in the cluster. The settings are added to a shared configmap that is mounted to all node pools. If you need nodepool-specific configuration, you can use `nodePools[].additionalConfig` which will be merged with `spec.general.additionalConfig` for that specific nodepool (nodepool settings override general settings). When a nodepool has `additionalConfig` specified, it will get its own configmap with the merged configuration.
+
+The settings must be provided as a map of strings, so use the flat form of any setting. If the value you want to provide is not a string, put it in quotes (for example `"true"` or `"1234"`). The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`.
 
 Note that changing any of the `additionalConfig` will trigger a rolling restart of the cluster. If want to avoid that please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
 
@@ -220,6 +222,7 @@ spec:
   security:
     tls: # Everything related to TLS configuration
       transport: # Configuration of the transport endpoint
+        enabled: true # Enable TLS for transport (default: true if transport config exists)
         generate: true # Have the operator generate and sign certificates
         perNode: true # Separate certificate per node
         # How long generated certificates are valid (default: 8760h = 1 year)
@@ -252,6 +255,7 @@ spec:
   security:
     tls: # Everything related to TLS configuration
       http: # Configuration of the HTTP endpoint
+        enabled: true # Enable TLS for HTTP (default: true if http config exists, false to disable)
         generate: true # Have the Operator generate and sign certificates
         customFQDN: "opensearch.example.com" # Optional: Custom FQDN for the certificate
         # How long generated certificates are valid (default: 8760h = 1 year)
@@ -264,6 +268,8 @@ spec:
 ```
 
 Again, you have the option of either letting the Operator generate and sign the certificates or providing your own. The only difference between node transport certificates and node HTTP/REST APIs is that per-node certificate are not possible here. In all other respects the two work the same way.
+
+**Note:** The `enabled` field controls whether TLS is enabled for the HTTP endpoint. If `enabled` is set to `false`, the cluster will use HTTP instead of HTTPS. If `enabled` is `nil` (not set), TLS is enabled by default when the HTTP config exists. To explicitly disable TLS, set `enabled: false`.
 
 When using generated certificates, you can optionally specify a `customFQDN` field to include a custom domain in the certificate's Subject Alternative Names (SAN) alongside the default cluster DNS names.
 
@@ -298,7 +304,7 @@ general:
   pluginsList:
     [
       "repository-s3",
-      "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip",
+      "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip",
     ]
 ```
 
@@ -645,7 +651,7 @@ If you are using emptyDir, it is recommended that you set `spec.general.drainDat
 
 #### HostPath
 
-As a last option you can hose a `hostPath`. Please note that hostPath is strongly discouraged, and if you do choose this option, then you must also configure affinity for the node pool to ensure that multiple pods do not schedule to the same Kubernetes host.
+As a last option you can use a `hostPath`. Please note that hostPath is strongly discouraged. By default, the operator applies pod anti-affinity to prevent multiple pods from scheduling on the same node, which helps when using hostPath. However, if you need stricter control, you can configure explicit affinity rules for the node pool to ensure that multiple pods do not schedule to the same Kubernetes host.
 
 ```yaml
 nodePools:
@@ -692,6 +698,33 @@ The Opensearch pods by default launch an init container to configure the volume.
 Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods (with the same limitations for the init containers).
 
 The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod.
+
+### Host Aliases for pods and containers
+
+You can add entries to Opensearch, Bootstrap and Dashboard pods /etc/hosts files using [HostAliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/).
+
+The structure is the same for both Opensearch pods (in `spec.general`) and the Dashboard pod (in `spec.dashboards`):
+
+```yaml
+spec:
+  general:
+    hostAliases:
+    - hostnames:
+      - example.com
+      ip: 127.0.0.1
+  dashboards:
+    hostAliases:
+    - hostnames:
+      - example.com
+      ip: 127.0.0.1
+  bootstrap:
+    hostAliases:
+    - hostnames:
+      - example.com
+      ip: 127.0.0.1
+```
+
+By default, the bootstrap pods will have the same hostAliases set as the Opensearch pods. To overwrite this, set the hostAliases in the bootstrap section.
 
 ### Labels or Annotations on OpenSearch nodes
 
@@ -763,6 +796,55 @@ spec:
       roles:
         - "master"
 ```
+
+### Pod Affinity
+
+By default, the operator applies pod anti-affinity rules to prevent multiple pods from the same OpenSearch cluster from being scheduled on the same node. This improves high availability by reducing the risk of multiple pods being affected by a single node failure.
+
+The default anti-affinity uses `PreferredDuringSchedulingIgnoredDuringExecution`, which is a soft preference that won't prevent scheduling if no other nodes are available, but will prefer to spread pods across nodes.
+
+You can override this default behavior by explicitly setting the `affinity` field in your node pool, bootstrap, or dashboards configuration:
+
+```yaml
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      roles:
+        - "master"
+        - "data"
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  opster.io/opensearch-cluster: my-cluster
+              topologyKey: kubernetes.io/hostname
+  bootstrap:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  opster.io/opensearch-cluster: my-cluster
+              topologyKey: kubernetes.io/hostname
+  dashboards:
+    enable: true
+    affinity:
+      podAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: opensearch-dashboards
+              topologyKey: kubernetes.io/zone
+```
+
+If you set an explicit `affinity`, it will completely replace the default anti-affinity behavior. To disable anti-affinity entirely, you can set `affinity: {}`.
 
 ### Sidecar Containers
 
@@ -841,12 +923,52 @@ spec:
         path: /path/to/mount/volume
         persistentVolumeClaim:
           claimName: claim-name
+      - name: nfs-volume
+        path: /mnt/backups/opensearch
+        nfs:
+          server: 192.168.1.233
+          path: /export/backups/opensearch
+          readOnly: false # Optional, defaults to false
   dashboards:
     additionalVolumes:
       - name: example-secret
         path: /path/to/mount/volume
         secret:
           secretName: secret-name
+```
+
+#### NFS Volume Support
+
+NFS volumes can be mounted directly into OpenSearch pods without requiring external provisioners or CSI drivers. This is particularly useful for snapshot repositories stored on NFS shares. To configure an NFS volume, specify the `nfs` field with the required `server` and `path` parameters:
+
+```yaml
+spec:
+  general:
+    additionalVolumes:
+      - name: nfs-backups
+        path: /mnt/backups/opensearch
+        nfs:
+          server: 192.168.1.233
+          path: /export/backups/opensearch
+          readOnly: false # Optional, defaults to false
+```
+
+This can be combined with snapshot repository configuration:
+
+```yaml
+spec:
+  general:
+    additionalVolumes:
+      - name: nfs-backups
+        path: /mnt/backups/opensearch
+        nfs:
+          server: 192.168.1.233
+          path: /export/backups/opensearch
+    snapshotRepositories:
+      - name: nfs-repository
+        type: fs
+        settings:
+          location: /mnt/backups/opensearch
 ```
 
 The defined volumes are added to all pods of the opensearch cluster. It is currently not possible to define them per nodepool.
@@ -1206,7 +1328,11 @@ spec:
 # ...
 ```
 
-Provide the name of the secret that contains your securityconfig yaml files as `securityconfigSecret.name`. In the secret, you can provide the files that you want to configure. The operator will only apply the files present in the secret. Note that OpenSearch requires all the files to be applied when the cluster is first created. So, the files that you do not provide in the securityconfig secret, the operator will use the default files provided in the opensearch-security plugin. See [opensearch-security](https://github.com/opensearch-project/security/tree/main/config) for the list of all configuration files and their default values.
+Provide the name of the secret that contains your securityconfig yaml files as `securityConfigSecret.name`. This secret acts as the source of truth that you manage. The operator always creates its own runtime secret named `<cluster-name>-security-config-generated`, copies your files into it (or falls back to the bundled defaults when no secret is supplied), and automatically updates the password hashes for the admin and dashboard (kibanaserver) users before applying the configuration to the cluster.
+
+**Important:** You no longer need to provide password hashes for the `admin` or `kibanaserver` users in your security config secret. The operator will automatically generate password hashes from the credentials secrets and override any hash values you provide in the security config secret for these users. This means you only need to manage passwords in one place (the credentials secrets), not in both the credentials secrets and the security config secret.
+
+Note that OpenSearch requires all the files to be applied when the cluster is first created. So, the files that you do not provide in the securityconfig secret, the operator will use the default files provided in the opensearch-security plugin. See [opensearch-security](https://github.com/opensearch-project/security/tree/main/config) for the list of all configuration files and their default values.
 
 If you don't want to use the default files, you must provide at least a minimum configuration for the file. Example:
 
@@ -1219,7 +1345,9 @@ tenants.yml: |-
 
 These minimum configuration files can later be removed from the secret so that you don't overwrite the resources created via the CRDs or the REST APIs when modifying other configuration files.
 
-In addition, you must provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). This user must be defined in your securityconfig and must have appropriate permissions (currently admin).
+In addition, you can provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). When you omit this field the operator automatically creates `<cluster-name>-admin-password`, seeds it with the default `admin` username and a **random password**, and automatically generates the password hash and adds it to the generated securityconfig. If you bring your own secret, the operator reads the password from your secret and automatically generates the hash and adds it to the generated securityconfig without modifying your source secret.
+
+Similarly, for OpenSearch Dashboards, if you don't provide `dashboards.opensearchCredentialsSecret`, the operator automatically creates `<cluster-name>-dashboards-password` with a **random password** for the `kibanaserver` user and automatically generates the password hash and adds it to the generated securityconfig.
 
 You must also configure SSL/TLS HTTP. You can either let the operator generate all needed certificates or supply them yourself. If you use your own certificates you must also provide an admin certificate that the operator can use to apply the securityconfig.
 
@@ -1342,8 +1470,9 @@ spec:
 
 ### Custom Admin User
 
-In order to create your cluster with an adminuser different from the default `admin:admin` you will have to walk through the following steps:
-First you will have to create a secret with your admin user configuration (in this example `admin-credentials-secret`):
+In order to create your cluster with an admin user different from the default, you can provide your own admin credentials secret. The operator will automatically generate the password hash and add it to the security config, so you no longer need to manually generate and include the password hash in your security config secret.
+
+First, create a secret with your admin user configuration (in this example `admin-credentials-secret`):
 
 ```yaml
 apiVersion: v1
@@ -1358,10 +1487,12 @@ data:
   password: YWRtaW4xMjM=
 ```
 
-Then you have to create your own securityconfig and store it in a secret (`securityconfig-secret` in this example). You can take a look at [securityconfig-secret.yaml](../../opensearch-operator/examples/securityconfig-secret.yaml) for how such a secret should look like.
-Make sure that the password hash of the admin user corresponds to the password you stored in the `admin-credentials-secret`.
+**Important:** You do **not** need to include the password hash in your security config secret. The operator will automatically:
+1. Read the password from your `adminCredentialsSecret`
+2. Generate the bcrypt hash
+3. Override the `admin` user's hash in the generated security config secret (`<cluster-name>-security-config-generated`)
 
-Notice that inside `securityconfig-secret` You must edit the `hash` of the admin user before creating the secret. if you have python 3.x installed on your machine you can use the following command to hash your password: `python -c 'import bcrypt; print(bcrypt.hashpw("admin123".encode("utf-8"), bcrypt.gensalt(12, prefix=b"2a")).decode("utf-8"))'`
+If you provide your own securityconfig secret, you can optionally include the admin user definition, but any hash you provide will be automatically overridden by the operator:
 
 ```yaml
 internal_users.yml: |-
@@ -1369,14 +1500,14 @@ internal_users.yml: |-
     type: "internalusers"
     config_version: 2
   admin:
-    hash: "$2y$12$lJsHWchewGVcGlYgE3js/O4bkTZynETyXChAITarCHLz8cuaueIyq"   <------- change that hash to your new password hash
+    # hash field is optional - operator will override it automatically
     reserved: true
     backend_roles:
     - "admin"
     description: "Demo admin user"
 ```
 
-The last thing that you have to do is to add that security configuration to your cluster spec:
+Add the security configuration to your cluster spec:
 
 ```yaml
 security:
@@ -1384,7 +1515,7 @@ security:
     adminCredentialsSecret:
       name: admin-credentials-secret # The secret with the admin credentials for the operator to use
     securityConfigSecret:
-      name: securityconfig-secret # The secret containing your customized securityconfig
+      name: securityconfig-secret # Optional: The secret containing your customized securityconfig
   tls:
     transport:
       generate: true
@@ -1392,11 +1523,24 @@ security:
       generate: true
 ```
 
-Changing the admin password after the cluster has been created is possible via the same way. You must update your securityconfig (in the `securityconfig-secret`) and the content of the `admin-credentials-secret` to both reflect the new password. Note that currently the operator cannot make changes in the securityconfig itself. As such you must always update the securityconfig in the secret with the new password and in addition provide it via the credentials secret so that the operator can still access the cluster.
+**Changing the admin password:** To change the admin password after the cluster has been created, simply update the password in your `admin-credentials-secret`. The operator will automatically:
+1. Detect the password change
+2. Generate a new password hash
+3. Update the generated security config secret
+4. Trigger a security config update job to apply the changes to OpenSearch
+
+You no longer need to manually update the password hash in the security config secret.
 
 ### Custom Dashboards user
 
-Dashboards requires an opensearch user to connect to the cluster. By default Dashboards is configured to use the demo admin user. If you supply your own securityconfig and want to change the credentials Dashboards should use, you must create a secret with keys `username` and `password` that contains the new credentials and then supply that secret to the operator via the cluster spec:
+Dashboards requires an opensearch user (typically `kibanaserver`) to connect to the cluster. 
+
+**If you don't provide a custom credentials secret**, the operator automatically:
+1. Creates a secret named `<cluster-name>-dashboards-password` with a **random password** for the `kibanaserver` user
+2. Generates the password hash and automatically adds it to the generated security config secret
+3. Configures Dashboards to use these credentials
+
+**If you want to use custom credentials**, create a secret with keys `username` and `password` and supply it to the operator via the cluster spec:
 
 ```yaml
 spec:
@@ -1405,10 +1549,29 @@ spec:
       name: dashboards-credentials # This is the name of your secret that contains the credentials for Dashboards to use
 ```
 
+**Important:** Similar to the admin user, you do **not** need to include the password hash for the `kibanaserver` user in your security config secret. The operator will automatically:
+1. Read the password from your `opensearchCredentialsSecret` (or use the generated random password if not provided)
+2. Generate the bcrypt hash
+3. Override the `kibanaserver` user's hash in the generated security config secret
+
+### Security Plugin Disabled
+
+When the security plugin is disabled (`spec.security.disable: true`), password management works differently:
+
+**Admin User:**
+- You can now set a custom password for the admin user by providing `adminCredentialsSecret` with your desired password
+- The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable in the bootstrap pod and all OpenSearch StatefulSet pods
+- This allows OpenSearch to use your custom password during initial setup, even when the security plugin is disabled
+
+**Dashboards User:**
+- Custom passwords for the Dashboards user are **not supported** when the security plugin is disabled
+- The operator will use the default `kibanaserver` password
+- This is a current limitation
+
 ## Adding Opensearch Monitoring to your cluster
 
-The operator allows you to install and enable the [Aiven monitoring plugin for OpenSearch](https://github.com/aiven/prometheus-exporter-plugin-for-opensearch) on your cluster as a built-in feature. If enabled the operator will install the aiven plugin into the opensearch pods and generate a Prometheus ServiceMonitor object to configure the plugin for scraping.
-This feature needs internet connectivity to download the plugin. if you are working in a restricted environment, please download the plugin zip for your cluster version (example for 2.3.0: `https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip`) and provide it at a location the operator can reach. Configure that URL as `pluginURL` in the monitoring config. By default the convention shown below in the example will be used if no `pluginUrl` is specified.
+The operator allows you to install and enable the [Prometheus exporter plugin for OpenSearch](https://github.com/opensearch-project/opensearch-prometheus-exporter) on your cluster as a built-in feature. If enabled the operator will install the  plugin into the opensearch pods and generate a Prometheus ServiceMonitor object to configure the plugin for scraping.
+This feature needs internet connectivity to download the plugin. if you are working in a restricted environment, please download the plugin zip for your cluster version (example for 2.3.0: `https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip`) and provide it at a location the operator can reach. Configure that URL as `pluginURL` in the monitoring config. By default the convention shown below in the example will be used if no `pluginUrl` is specified.
 
 By default the Opensearch admin user will be used to access the monitoring API. If you want to use a separate user with limited permissions you need to create that user using either of the following options:
 
@@ -1432,7 +1595,7 @@ spec:
         someLabelKey: someLabelValue
       scrapeInterval: 30s # The scrape interval for Prometheus
       monitoringUserSecret: monitoring-user-secret # Optional, name of a secret with username/password for prometheus to acces the plugin metrics endpoint with, defaults to the admin user
-      pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip # Optional, custom URL for the monitoring plugin
+      pluginUrl: https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip # Optional, custom URL for the monitoring plugin
       tlsConfig: # Optional, use this to override the tlsConfig of the generated ServiceMonitor, only the following provided options can be set currently
         serverName: "testserver.test.local"
         insecureSkipVerify: true # The operator currently does not allow configuring the ServiceMonitor with certificates, so this needs to be set

@@ -60,14 +60,14 @@ func ClusterDescWithBootstrapKeystoreSecret(secretName string, keyMappings map[s
 	}
 }
 
-func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, bootstrapAdditionalConfig map[string]string) opsterv1.OpenSearchCluster {
+func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, bootstrapEnv []corev1.EnvVar) opsterv1.OpenSearchCluster {
 	return opsterv1.OpenSearchCluster{
 		Spec: opsterv1.ClusterSpec{
 			General: opsterv1.GeneralConfig{
 				AdditionalConfig: addtitionalConfig,
 			},
 			Bootstrap: opsterv1.BootstrapConfig{
-				AdditionalConfig: bootstrapAdditionalConfig,
+				Env: bootstrapEnv,
 			},
 		},
 	}
@@ -77,13 +77,13 @@ var _ = Describe("Builders", func() {
 	When("Constructing a STS for a NodePool", func() {
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
 		})
 		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
 			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
 			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
@@ -105,7 +105,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "cluster_manager,ingest",
@@ -117,7 +117,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"master"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "cluster_manager",
@@ -129,7 +129,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "master",
@@ -141,7 +141,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"warm"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "warm",
@@ -153,10 +153,22 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"warm"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "search",
+			}))
+		})
+		It("should set node.roles to [] for coordinator-only nodes (OpenSearch 3.0+)", func() {
+			clusterObject := ClusterDescWithVersion("3.0.0")
+			nodePool := opsterv1.NodePool{
+				Component: "coordinators",
+				Roles:     []string{},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "node.roles",
+				Value: "[]",
 			}))
 		})
 		It("should have annotations added to node", func() {
@@ -168,7 +180,7 @@ var _ = Describe("Builders", func() {
 					"testAnnotationKey": "testAnnotationValue",
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
 				ConfigurationChecksumAnnotation: "foobar",
 				"testAnnotationKey":             "testAnnotationValue",
@@ -183,7 +195,7 @@ var _ = Describe("Builders", func() {
 					"testAnnotationKey": "testAnnotationValue",
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Annotations).To(Equal(map[string]string{
 				ConfigurationChecksumAnnotation: "foobar",
 				"testAnnotationKey":             "testAnnotationValue",
@@ -196,14 +208,14 @@ var _ = Describe("Builders", func() {
 				Roles:             []string{"cluster_manager"},
 				PriorityClassName: "default",
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.PriorityClassName).To(Equal("default"))
 		})
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"
 			clusterObject.Spec.General.DefaultRepo = &customRepository
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:latest"))
 		})
 		It("should use InitHelper.Image as InitHelper image if configured", func() {
@@ -214,12 +226,12 @@ var _ = Describe("Builders", func() {
 					Image: &customImage,
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/custombusybox:1.2.3"))
 		})
 		It("should use defaults when no custom image is configured for InitHelper image", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("docker.io/busybox:latest"))
 		})
 		It("should use a custom dns name when env variable is set as cluster url", func() {
@@ -236,7 +248,7 @@ var _ = Describe("Builders", func() {
 			_ = os.Setenv(helpers.DnsBaseEnvVariable, customDns)
 
 			actualUrl := URLForCluster(&clusterObject)
-			expectedUrl := fmt.Sprintf("https://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
+			expectedUrl := fmt.Sprintf("http://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
 
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
@@ -248,7 +260,7 @@ var _ = Describe("Builders", func() {
 
 			actualUrl := URLForCluster(&clusterObject)
 			// When HttpPort is 0 (default), ClusterURL should default to 9200
-			expectedUrl := fmt.Sprintf("https://%s:9200", customHost)
+			expectedUrl := fmt.Sprintf("http://%s:9200", customHost)
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
 
@@ -258,7 +270,7 @@ var _ = Describe("Builders", func() {
 			pluginB := "another-plugin"
 
 			clusterObject.Spec.General.PluginsList = []string{pluginA, pluginB}
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
 
 			installCmd := fmt.Sprintf(
 				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
@@ -283,7 +295,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "search",
@@ -301,7 +313,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "search",
@@ -333,7 +345,7 @@ var _ = Describe("Builders", func() {
 				Roles:     []string{"cluster_manager", "data"},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
@@ -346,7 +358,7 @@ var _ = Describe("Builders", func() {
 				// No persistence specified
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			var expected *string = nil
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
@@ -364,7 +376,7 @@ var _ = Describe("Builders", func() {
 				}},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			var expected *string = nil
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
@@ -384,7 +396,7 @@ var _ = Describe("Builders", func() {
 				}},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			expected := &emptyString
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
@@ -404,7 +416,7 @@ var _ = Describe("Builders", func() {
 				}},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			expected := &specificClass
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
@@ -418,7 +430,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
 				Value: "-Xms1024M -Xmx1024M -Dopensearch.transport.cname_in_publish_address=true",
@@ -433,7 +445,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
 				Value: "-Xms768M -Xmx768M -Dopensearch.transport.cname_in_publish_address=true",
@@ -449,7 +461,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
 				Value: "-Xms953M -Xmx953M -Dopensearch.transport.cname_in_publish_address=true",
@@ -458,7 +470,7 @@ var _ = Describe("Builders", func() {
 		It("should set jvm to default when memory request and jvm are not provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
 				Value: "-Xms512M -Xmx512M -Dopensearch.transport.cname_in_publish_address=true",
@@ -469,7 +481,7 @@ var _ = Describe("Builders", func() {
 			nodePool := opsterv1.NodePool{
 				Jvm: "-Xms1024M -Xmx1024M",
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
 				Value: "-Xms1024M -Xmx1024M -Dopensearch.transport.cname_in_publish_address=true",
@@ -485,7 +497,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
 				Value: "-Xms1024M -Xmx1024M -Dopensearch.transport.cname_in_publish_address=true",
@@ -521,7 +533,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 
 			// Should have 3 containers total: 1 main OpenSearch + 2 additional
 			Expect(len(result.Spec.Template.Spec.Containers)).To(Equal(3))
@@ -551,7 +563,7 @@ var _ = Describe("Builders", func() {
 			nodePool := opsterv1.NodePool{
 				InitContainers: []corev1.Container{initContainer},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers).To(ContainElement(corev1.Container{
 				Name:  "custom-init",
 				Image: "custom-init:latest",
@@ -574,7 +586,7 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
 				Roles:          []string{"cluster_manager"},
 				InitContainers: []corev1.Container{initContainer1, initContainer2},
-			}, "foobar", nil, nil, nil)
+			}, "foobar", nil, nil)
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(3))
 			Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("custom-init1"))
 			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init2"))
@@ -590,33 +602,21 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:latest"))
 		})
 
-		It("should apply the BootstrapNodeConfig to the env variables", func() {
+		It("should apply the ENV to the env variables", func() {
 			mockKey := "server.basePath"
 
-			mockConfig := map[string]string{
-				mockKey: "/opensearch-operated",
+			mockEnv := []corev1.EnvVar{
+				{
+					Name:  mockKey,
+					Value: "/opensearch-operated",
+				},
 			}
-			clusterObject := ClusterDescWithAdditionalConfigs(nil, mockConfig)
+			clusterObject := ClusterDescWithAdditionalConfigs(nil, mockEnv)
 			result := NewBootstrapPod(&clusterObject, nil, nil)
 
 			Expect(result.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  mockKey,
-				Value: mockConfig[mockKey],
-			}))
-		})
-
-		It("should apply the General.AdditionalConfig to the env variables if not overwritten", func() {
-			mockKey := "server.basePath"
-
-			mockConfig := map[string]string{
-				mockKey: "/opensearch-operated",
-			}
-			clusterObject := ClusterDescWithAdditionalConfigs(mockConfig, nil)
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-
-			Expect(result.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
-				Name:  mockKey,
-				Value: mockConfig[mockKey],
+				Value: "/opensearch-operated",
 			}))
 		})
 
@@ -633,28 +633,26 @@ var _ = Describe("Builders", func() {
 			Expect(result.ObjectMeta.Annotations).To(Equal(expectedAnnotations))
 		})
 
-		It("should overwrite the General.AdditionalConfig with Bootstrap.AdditionalConfig when set", func() {
+		It("should apply Bootstrap.Env when set", func() {
 			mockKey1 := "server.basePath"
 			mockKey2 := "server.rewriteBasePath"
 
 			mockGeneralConfig := map[string]string{
 				mockKey1: "/opensearch-operated",
 			}
-			mockBootstrapConfig := map[string]string{
-				mockKey2: "false",
+			mockBootstrapEnv := []corev1.EnvVar{
+				{
+					Name:  mockKey2,
+					Value: "false",
+				},
 			}
 
-			clusterObject := ClusterDescWithAdditionalConfigs(mockGeneralConfig, mockBootstrapConfig)
+			clusterObject := ClusterDescWithAdditionalConfigs(mockGeneralConfig, mockBootstrapEnv)
 			result := NewBootstrapPod(&clusterObject, nil, nil)
-
-			Expect(result.Spec.Containers[0].Env).NotTo(ContainElement(corev1.EnvVar{
-				Name:  mockKey1,
-				Value: mockGeneralConfig[mockKey2],
-			}))
 
 			Expect(result.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  mockKey2,
-				Value: mockBootstrapConfig[mockKey2],
+				Value: "false",
 			}))
 		})
 		It("should properly setup the main command when installing plugins", func() {
@@ -871,11 +869,7 @@ var _ = Describe("Builders", func() {
 
 		It("should use custom storage size from bootstrap resources", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.Spec.Bootstrap.Resources = corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("2Gi"),
-				},
-			}
+			clusterObject.Spec.Bootstrap.DiskSize = resource.MustParse("2Gi")
 			result := NewBootstrapPVC(&clusterObject)
 
 			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("2Gi")))
@@ -898,7 +892,7 @@ var _ = Describe("Builders", func() {
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
 
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[1].VolumeMounts).To(ContainElements([]corev1.VolumeMount{
 				{
 					Name:      "keystore",
@@ -918,7 +912,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElement(corev1.VolumeMount{
 				Name:      "keystore",
 				MountPath: "/usr/share/opensearch/config/opensearch.keystore",
@@ -939,7 +933,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[1].VolumeMounts).To(ContainElement(corev1.VolumeMount{
 				Name:      "keystore-" + mockSecretName,
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
@@ -963,7 +957,7 @@ var _ = Describe("Builders", func() {
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
-			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			sts.Status.ReadyReplicas = 2
 			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
@@ -984,7 +978,7 @@ var _ = Describe("Builders", func() {
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
-			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			sts.Status.ReadyReplicas = 2
 			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
@@ -1005,7 +999,7 @@ var _ = Describe("Builders", func() {
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
-			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			sts.Status.ReadyReplicas = 2
 			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
@@ -1028,7 +1022,7 @@ var _ = Describe("Builders", func() {
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
-			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal(customCommand))
 		})
 	})
@@ -1047,7 +1041,7 @@ var _ = Describe("Builders", func() {
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
-			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(sts.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccount))
 
 			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "cmd", nil, nil)
@@ -1113,7 +1107,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.InitialDelaySeconds).To(Equal(int32(10)))
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.TimeoutSeconds).To(Equal(int32(5)))
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.PeriodSeconds).To(Equal(int32(20)))
@@ -1150,7 +1144,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.InitialDelaySeconds).To(Equal(int32(10)))
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.TimeoutSeconds).To(Equal(int32(5)))
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.PeriodSeconds).To(Equal(int32(20)))
@@ -1199,7 +1193,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.InitialDelaySeconds).To(Equal(int32(12)))
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.TimeoutSeconds).To(Equal(int32(6)))
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.PeriodSeconds).To(Equal(int32(25)))
@@ -1227,11 +1221,11 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
-				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
-				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
 		})
 
 		It("should have custom command when set", func() {
@@ -1248,7 +1242,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
 				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
@@ -1256,10 +1250,17 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
-	When("DisableSSL is enabled", func() {
+	When("HTTP TLS is disabled", func() {
 		It("should use http protocol in URLForCluster", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			clusterObject.Spec.General.DisableSSL = true
+			enabled := false
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Tls: &opsterv1.TlsConfig{
+					Http: &opsterv1.TlsConfigHttp{
+						Enabled: &enabled,
+					},
+				},
+			}
 			clusterObject.Spec.General.ServiceName = "opensearch"
 			clusterObject.Namespace = "default"
 			clusterObject.Spec.General.HttpPort = 9200
@@ -1271,12 +1272,19 @@ var _ = Describe("Builders", func() {
 
 		It("should use http protocol in probe commands", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			clusterObject.Spec.General.DisableSSL = true
+			enabled := false
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Tls: &opsterv1.TlsConfig{
+					Http: &opsterv1.TlsConfigHttp{
+						Enabled: &enabled,
+					},
+				},
+			}
 			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
 				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
@@ -1287,7 +1295,14 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
 			clusterObject.Name = "test-cluster"
 			clusterObject.Namespace = "default"
-			clusterObject.Spec.General.DisableSSL = true
+			enabled := false
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Tls: &opsterv1.TlsConfig{
+					Http: &opsterv1.TlsConfigHttp{
+						Enabled: &enabled,
+					},
+				},
+			}
 			clusterObject.Spec.General.Monitoring.Enable = true
 			clusterObject.Spec.General.Monitoring.ScrapeInterval = "30s"
 
@@ -1311,7 +1326,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			nodePoolSts := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			nodePoolSts := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
 			for _, container := range nodePoolSts.Spec.Template.Spec.InitContainers {
 				Expect(container.Resources).To(Equal(clusterObject.Spec.InitHelper.Resources))
 			}
@@ -1362,6 +1377,84 @@ var _ = Describe("Builders", func() {
 
 			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Containers[0].Resources).To(Equal(clusterObject.Spec.Security.Config.UpdateJob.Resources))
+		})
+	})
+
+	When("configuring a host alias for the cluster", func() {
+		It("should configure the host alias for the statefulset and bootstrap pods", func() {
+			hostNames := []string{"dummy.com"}
+			hostAlias := corev1.HostAlias{
+				IP:        "3.5.7.9",
+				Hostnames: hostNames,
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Namespace = "foobar"
+			clusterObject.Name = "foobar"
+			clusterObject.Spec.General.HostAliases = []corev1.HostAlias{hostAlias}
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
+
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
+		})
+		It("should overwrite the host alias for the bootstrap pods", func() {
+			hostNames := []string{"dummy.com"}
+			hostAlias := corev1.HostAlias{
+				IP:        "3.5.7.9",
+				Hostnames: hostNames,
+			}
+			bootstrapHostNames := []string{"bootstrap.dummy.com"}
+			bootstrapHostAlias := corev1.HostAlias{
+				IP:        "3.5.7.10",
+				Hostnames: bootstrapHostNames,
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Namespace = "foobar"
+			clusterObject.Name = "foobar"
+			clusterObject.Spec.General.HostAliases = []corev1.HostAlias{hostAlias}
+			clusterObject.Spec.Bootstrap.HostAliases = []corev1.HostAlias{bootstrapHostAlias}
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
+
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{bootstrapHostAlias}))
+		})
+		It("should set the host alias for the bootstrap pods without hostAlias defined in opensearch pods", func() {
+			bootstrapHostNames := []string{"bootstrap.dummy.com"}
+			bootstrapHostAlias := corev1.HostAlias{
+				IP:        "3.5.7.10",
+				Hostnames: bootstrapHostNames,
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Namespace = "foobar"
+			clusterObject.Name = "foobar"
+			clusterObject.Spec.Bootstrap.HostAliases = []corev1.HostAlias{bootstrapHostAlias}
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.HostAliases).To(BeNil())
+
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{bootstrapHostAlias}))
 		})
 	})
 })

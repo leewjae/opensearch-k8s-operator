@@ -8,9 +8,11 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -23,6 +25,7 @@ var _ = Describe("snapshot repositories reconciler", func() {
 		instance   *opsterv1.OpenSearchCluster
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
+		clusterUrl string
 	)
 	const (
 		repoName = "testrepo"
@@ -65,6 +68,21 @@ var _ = Describe("snapshot repositories reconciler", func() {
 				Phase: opsterv1.PhasePending,
 			},
 		}
+		clusterUrl = fmt.Sprintf("%s/", helpers.ClusterURL(instance))
+		// Mock admin credentials secret for all tests (available when CreateClientForCluster is invoked)
+		adminSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-snapshotrepo-admin-password",
+				Namespace: "test",
+			},
+			Data: map[string][]byte{
+				"username": []byte("admin"),
+				"password": []byte("admin"),
+			},
+		}
+		mockClient.On("GetSecret", "test-snapshotrepo-admin-password", "test").Return(func(string, string) corev1.Secret {
+			return adminSecret
+		}, nil).Maybe()
 	})
 
 	JustBeforeEach(func() {
@@ -110,21 +128,13 @@ var _ = Describe("snapshot repositories reconciler", func() {
 
 			transport.RegisterResponder(
 				http.MethodGet,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					instance.Spec.General.ServiceName,
-					instance.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 			)
 
 			transport.RegisterResponder(
 				http.MethodHead,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					instance.Spec.General.ServiceName,
-					instance.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Once(failMessage),
 			)
 		})
@@ -134,9 +144,8 @@ var _ = Describe("snapshot repositories reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_snapshot/%s",
-						instance.Spec.General.ServiceName,
-						instance.Namespace,
+						"%s_snapshot/%s",
+						clusterUrl,
 						repoName,
 					),
 					httpmock.NewJsonResponderOrPanic(200, responses.SnapshotRepositoryResponse{
@@ -161,9 +170,8 @@ var _ = Describe("snapshot repositories reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_snapshot/%s",
-						instance.Spec.General.ServiceName,
-						instance.Namespace,
+						"%s_snapshot/%s",
+						clusterUrl,
 						repoName,
 					),
 					httpmock.NewJsonResponderOrPanic(200, responses.SnapshotRepositoryResponse{
@@ -178,9 +186,8 @@ var _ = Describe("snapshot repositories reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodPut,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_snapshot/%s",
-						instance.Spec.General.ServiceName,
-						instance.Namespace,
+						"%s_snapshot/%s",
+						clusterUrl,
 						repoName,
 					),
 					httpmock.NewStringResponder(200, "OK").Once(failMessage),
@@ -209,9 +216,8 @@ var _ = Describe("snapshot repositories reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_snapshot/%s",
-						instance.Spec.General.ServiceName,
-						instance.Namespace,
+						"%s_snapshot/%s",
+						clusterUrl,
 						repoName,
 					),
 					httpmock.NewStringResponder(404, "does not exist").Once(failMessage),
@@ -219,9 +225,8 @@ var _ = Describe("snapshot repositories reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodPut,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_snapshot/%s",
-						instance.Spec.General.ServiceName,
-						instance.Namespace,
+						"%s_snapshot/%s",
+						clusterUrl,
 						repoName,
 					),
 					httpmock.NewStringResponder(200, "OK").Once(failMessage),

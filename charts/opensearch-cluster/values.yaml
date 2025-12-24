@@ -125,8 +125,8 @@ cluster:
 
   # cluster boostrap pod configuration
   bootstrap:
-    # -- bootstrap additional configuration, key-value pairs that will be added to the opensearch.yml configuration
-    additionalConfig: {}
+    # -- bootstrap pod env variables
+    env: []
 
     # -- bootstrap pod affinity rules
     affinity: {}
@@ -162,6 +162,9 @@ cluster:
 
     # -- dashboards annotations
     annotations: {}
+
+    # -- dashboards pod topologySpreadConstraints
+    topologySpreadConstraints: []
 
     # -- dashboards Base Path for Opensearch Clusters running behind a reverse proxy
     basePath: ""
@@ -262,6 +265,9 @@ cluster:
     - component: masters
       # -- node pool pod annotations
       annotations: {}
+      # -- Extra items to add to opensearch.yml for this specific nodepool (merged with general.additionalConfig)
+      additionalConfig: {}
+
       diskSize: "30Gi"
       replicas: 3
       roles:
@@ -352,7 +358,15 @@ cluster:
         # This is used only when generate is true.
         duration: "8760h"
 
+        # -- Enable hot reloading of TLS certificates.
+        enableHotReload: false
+
       transport:
+        # -- DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh,
+        # only used when existing certificates are provided. This field is deprecated and will be removed in a future version.
+        # For OpenSearch 2.0.0+, use security.tls.http.adminDn instead.
+        adminDn: []
+
         # -- Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing
         # CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
         caSecret: {}
@@ -376,6 +390,9 @@ cluster:
         # -- Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
         # This is used only when generate is true.
         duration: "8760h"
+
+        # -- Enable hot reloading of TLS certificates.
+        enableHotReload: false
 
   # Opensearch Ingress configuration
   ingress:
