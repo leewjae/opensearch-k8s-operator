@@ -1212,7 +1212,7 @@ func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeCla
 
 	// Use default storage class and ReadWriteOnce access mode
 	// The bootstrap pod only needs a small amount of storage for cluster metadata
-	storageSize := resource.MustParse("1Gi")
+	storageSize := resource.MustParse("10Gi")
 	if !cr.Spec.Bootstrap.DiskSize.IsZero() {
 		storageSize = cr.Spec.Bootstrap.DiskSize
 	}
