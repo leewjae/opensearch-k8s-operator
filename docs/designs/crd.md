@@ -785,7 +785,7 @@ Es is the Schema for the es API
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.opster.io/v1` | | |
+| `apiVersion` _string_ | `opensearch.dremio.io/v1` | | |
 | `kind` _string_ | `OpenSearchCluster` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[ClusterSpec](#clusterspec)_ |  |  |  |
@@ -805,7 +805,7 @@ Es is the Schema for the es API
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.opster.io/v1` | | |
+| `apiVersion` _string_ | `opensearch.dremio.io/v1` | | |
 | `kind` _string_ | `OpenSearchISMPolicy` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[OpenSearchISMPolicySpec](#opensearchismpolicyspec)_ |  |  |  |
@@ -846,7 +846,7 @@ OpensearchActionGroup is the Schema for the opensearchactiongroups API
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.opster.io/v1` | | |
+| `apiVersion` _string_ | `opensearch.dremio.io/v1` | | |
 | `kind` _string_ | `OpensearchActionGroup` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[OpensearchActionGroupSpec](#opensearchactiongroupspec)_ |  |  |  |
@@ -887,7 +887,7 @@ OpensearchComponentTemplate is the schema for the OpenSearch component templates
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.opster.io/v1` | | |
+| `apiVersion` _string_ | `opensearch.dremio.io/v1` | | |
 | `kind` _string_ | `OpensearchComponentTemplate` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[OpensearchComponentTemplateSpec](#opensearchcomponenttemplatespec)_ |  |  |  |
@@ -1001,7 +1001,7 @@ OpensearchIndexTemplate is the schema for the OpenSearch index templates API
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.opster.io/v1` | | |
+| `apiVersion` _string_ | `opensearch.dremio.io/v1` | | |
 | `kind` _string_ | `OpensearchIndexTemplate` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[OpensearchIndexTemplateSpec](#opensearchindextemplatespec)_ |  |  |  |
@@ -1045,7 +1045,7 @@ OpensearchRole is the Schema for the opensearchroles API
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.opster.io/v1` | | |
+| `apiVersion` _string_ | `opensearch.dremio.io/v1` | | |
 | `kind` _string_ | `OpensearchRole` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[OpensearchRoleSpec](#opensearchrolespec)_ |  |  |  |
@@ -1084,7 +1084,7 @@ OpensearchSnapshotPolicy is the Schema for the opensearchsnapshotpolicies API
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.opster.io/v1` | | |
+| `apiVersion` _string_ | `opensearch.dremio.io/v1` | | |
 | `kind` _string_ | `OpensearchSnapshotPolicy` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[OpensearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)_ |  |  |  |
@@ -1127,7 +1127,7 @@ OpensearchTenant is the Schema for the opensearchtenants API
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.opster.io/v1` | | |
+| `apiVersion` _string_ | `opensearch.dremio.io/v1` | | |
 | `kind` _string_ | `OpensearchTenant` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[OpensearchTenantSpec](#opensearchtenantspec)_ |  |  |  |
@@ -1164,7 +1164,7 @@ OpensearchUser is the Schema for the opensearchusers API
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.opster.io/v1` | | |
+| `apiVersion` _string_ | `opensearch.dremio.io/v1` | | |
 | `kind` _string_ | `OpensearchUser` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[OpensearchUserSpec](#opensearchuserspec)_ |  |  |  |
@@ -1182,7 +1182,7 @@ OpensearchUserRoleBinding is the Schema for the opensearchuserrolebindings API
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.opster.io/v1` | | |
+| `apiVersion` _string_ | `opensearch.dremio.io/v1` | | |
 | `kind` _string_ | `OpensearchUserRoleBinding` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[OpensearchUserRoleBindingSpec](#opensearchuserrolebindingspec)_ |  |  |  |
