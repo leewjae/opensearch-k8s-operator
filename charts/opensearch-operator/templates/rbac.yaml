@@ -7,105 +7,20 @@ kind: ClusterRole
 {{- end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 rules:
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - statefulsets
-  - statefulsets/status
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - batch
-  resources:
-  - jobs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - ""
   resources:
   - configmaps
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-  - update
-- apiGroups:
-  - ""
-  resources:
   - namespaces
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
+  - persistentvolumeclaims
   - pods
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - secrets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - services
   verbs:
   - create
@@ -116,28 +31,18 @@ rules:
   - update
   - watch
 - apiGroups:
-  - "policy"
-  resources:
-  - poddisruptionbudgets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.dremio.io
+  - ""
   resources:
   - events
   verbs:
   - create
   - patch
+  - update
 - apiGroups:
-  - opensearch.dremio.io
+  - apps
   resources:
-  - opensearchactiongroups
+  - deployments
+  - statefulsets
   verbs:
   - create
   - delete
@@ -147,231 +52,17 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.dremio.io
+  - apps
   resources:
-  - opensearchactiongroups/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchactiongroups/status
+  - statefulsets/status
   verbs:
   - get
   - patch
   - update
 - apiGroups:
-  - opensearch.dremio.io
+  - batch
   resources:
-  - opensearchclusters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchclusters/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchclusters/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchcomponenttemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchcomponenttemplates/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchcomponenttemplates/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchindextemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchindextemplates/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchindextemplates/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchroles
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchroles/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchroles/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchtenants
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchtenants/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchtenants/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchuserrolebindings
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchuserrolebindings/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchuserrolebindings/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-    - opensearch.dremio.io
-  resources:
-    - opensearchismpolicies/status
-  verbs:
-    - get
-    - patch
-    - update
-- apiGroups:
-    - opensearch.dremio.io
-  resources:
-    - opensearchismpolicies/finalizers
-  verbs:
-    - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchusers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-    - opensearch.dremio.io
-  resources:
-    - opensearchismpolicies
-  verbs:
-    - create
-    - delete
-    - get
-    - list
-    - patch
-    - update
-    - watch
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchusers/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.dremio.io
-  resources:
-  - opensearchusers/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - persistentvolumeclaims
+  - jobs
   verbs:
   - create
   - delete
@@ -395,7 +86,16 @@ rules:
 - apiGroups:
   - opensearch.dremio.io
   resources:
+  - opensearchactiongroups
+  - opensearchclusters
+  - opensearchcomponenttemplates
+  - opensearchindextemplates
+  - opensearchismpolicies
+  - opensearchroles
   - opensearchsnapshotpolicies
+  - opensearchtenants
+  - opensearchuserrolebindings
+  - opensearchusers
   verbs:
   - create
   - delete
@@ -407,17 +107,47 @@ rules:
 - apiGroups:
   - opensearch.dremio.io
   resources:
+  - opensearchactiongroups/finalizers
+  - opensearchclusters/finalizers
+  - opensearchcomponenttemplates/finalizers
+  - opensearchindextemplates/finalizers
+  - opensearchismpolicies/finalizers
+  - opensearchroles/finalizers
+  - opensearchsnapshotpolicies/finalizers
+  - opensearchtenants/finalizers
+  - opensearchuserrolebindings/finalizers
+  - opensearchusers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.dremio.io
+  resources:
+  - opensearchactiongroups/status
+  - opensearchclusters/status
+  - opensearchcomponenttemplates/status
+  - opensearchindextemplates/status
+  - opensearchismpolicies/status
+  - opensearchroles/status
   - opensearchsnapshotpolicies/status
+  - opensearchtenants/status
+  - opensearchuserrolebindings/status
+  - opensearchusers/status
   verbs:
   - get
   - patch
   - update
 - apiGroups:
-  - opensearch.dremio.io
+  - policy
   resources:
-  - opensearchsnapshotpolicies/finalizers
+  - poddisruptionbudgets
   verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
   - update
+  - watch
 {{- if not .Values.useRoleBindings }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -441,6 +171,9 @@ kind: ClusterRole
 {{- end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-proxy
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 rules:
@@ -461,6 +194,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-leader-election
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 rules:
@@ -512,6 +246,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-leader-election
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:
@@ -526,6 +261,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: {{ if .Values.useRoleBindings }}RoleBinding{{ else }}ClusterRoleBinding{{ end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:
@@ -541,6 +279,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: {{ if .Values.useRoleBindings }}RoleBinding{{ else }}ClusterRoleBinding{{ end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-proxy
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:

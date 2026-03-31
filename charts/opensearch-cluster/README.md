@@ -8,6 +8,7 @@ The following table lists the configurable parameters of the Helm chart.
 
 | Parameter | Type | Default | Description |
 | --- | ---- | ------- | ----------- |
+| `apiGroup` | string | `"opensearch.org"` | API group for OpenSearch CRDs. Use "opensearch.org" (recommended) or "opensearch.opster.io" (legacy) |
 | `nameOverride` | string | `""` |  |
 | `fullnameOverride` | string | `""` |  |
 | `serviceAccount.create` | bool | `false` | Create Service Account |
@@ -30,6 +31,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.general.monitoring.pluginUrl` | string | `""` | Custom URL for the monitoring plugin |
 | `cluster.general.monitoring.scrapeInterval` | string | `"30s"` | How often to scrape metrics |
 | `cluster.general.monitoring.tlsConfig` | object | `{}` | Override the tlsConfig of the generated ServiceMonitor |
+| `cluster.general.hostNetwork` | bool | `false` |  |
 | `cluster.general.pluginsList` | list | `[]` | List of Opensearch plugins to install |
 | `cluster.general.podSecurityContext` | object | `{}` | Opensearch pod security context configuration |
 | `cluster.general.securityContext` | object | `{}` | Opensearch securityContext |
@@ -46,7 +48,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.bootstrap.nodeSelector` | object | `{}` | bootstrap pod node selectors |
 | `cluster.bootstrap.resources` | object | `{}` | bootstrap pod cpu and memory resources |
 | `cluster.bootstrap.tolerations` | list | `[]` | bootstrap pod tolerations |
-| `cluster.confMgmt.smartScaler` | bool | `false` | Enable nodes to be safely removed from the cluster |
+| `cluster.confMgmt.smartScaler` | bool | `true` | Enable nodes to be safely removed from the cluster |
 | `cluster.dashboards.additionalConfig` | object | `{}` | Additional properties for opensearch_dashboards.yaml |
 | `cluster.dashboards.affinity` | object | `{}` | dashboards pod affinity rules |
 | `cluster.dashboards.annotations` | object | `{}` | dashboards annotations |
@@ -122,4 +124,4 @@ The following table lists the configurable parameters of the Helm chart.
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
-Opensearch-cluster Helm Chart version: `3.0.0`
+Opensearch-cluster Helm Chart version: `3.2.2`

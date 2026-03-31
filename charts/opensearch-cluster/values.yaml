@@ -2,6 +2,9 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# -- API group for OpenSearch CRDs.
+apiGroup: opensearch.dremio.io
+
 nameOverride: ""
 fullnameOverride: ""
 
@@ -70,7 +73,7 @@ cluster:
 #          # Only read "sensitive-value" from the secret, keep its name.
 #          sensitive-value: sensitive-value
 
-    # Monitoring configuration. Check [documentation](https://github.com/Opster/opensearch-k8s-operator/blob/main/docs/userguide/main.md#adding-opensearch-monitoring-to-your-cluster) how to configure it.
+    # Monitoring configuration. Check [documentation](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#adding-opensearch-monitoring-to-your-cluster) how to configure it.
     monitoring:
       # -- Enable cluster monitoring
       enable: false
@@ -90,6 +93,9 @@ cluster:
       # -- Override the tlsConfig of the generated ServiceMonitor
       tlsConfig: {}
 #        insecureSkipVerify: true
+
+    # Enables host networking for all pods in the cluster.
+    hostNetwork: false
 
     # -- List of Opensearch plugins to install
     pluginsList: []
@@ -123,6 +129,10 @@ cluster:
     # -- Opensearch version
     version: 2.3.0
 
+    # -- OpenSearch installation directory inside the container.
+    # If not set, defaults to /usr/share/opensearch.
+    # opensearchHome: "/usr/share/opensearch"
+
   # cluster boostrap pod configuration
   bootstrap:
     # -- bootstrap pod env variables
@@ -150,7 +160,7 @@ cluster:
   # cluster additional services
   confMgmt:
     # -- Enable nodes to be safely removed from the cluster
-    smartScaler: false
+    smartScaler: true
 
   # cluster dashboards configuration
   dashboards:
@@ -243,11 +253,15 @@ cluster:
     # -- dashboards version
     version: 2.3.0
 
+    # -- OpenSearch Dashboards installation directory inside the container.
+    # If not set, defaults to /usr/share/opensearch-dashboards.
+    # opensearchDashboardsHome: "/usr/share/opensearch-dashboards"
+
   # initHelper configuration
   initHelper:
     # -- initHelper image
     image: docker.io/busybox
-    
+
     # -- initHelper image pull policy
     imagePullPolicy: "IfNotPresent"
 
@@ -415,9 +429,9 @@ cluster:
 
       # -- Opensearch tls configuration
       tls: []
-        #- hosts:
-        #   - example.com
-        #  secretName: tls-secret
+        # - hosts:
+        #     - example.com
+        #   secretName: tls-secret
 
     # Dashboards Ingress configuration
     dashboards:

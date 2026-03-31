@@ -17,6 +17,8 @@ limitations under the License.
 package v1
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,6 +57,8 @@ type GeneralConfig struct {
 	//+kubebuilder:default=true
 	SetVMMaxMapCount *bool   `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
+	// HostNetwork enables host networking for all pods in the cluster.
+	HostNetwork bool `json:"hostNetwork,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services
@@ -77,6 +81,8 @@ type GeneralConfig struct {
 	// Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
 	// instead of the default internal Kubernetes service DNS name.
 	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
+	// OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set.
+	OpenSearchHome string `json:"opensearchHome,omitempty"`
 }
 
 type PdbConfig struct {
@@ -162,9 +168,11 @@ type PVCSource struct {
 
 // ConfMgmt defines which additional services will be deployed
 type ConfMgmt struct {
-	AutoScaler  bool `json:"autoScaler,omitempty"`
-	VerUpdate   bool `json:"VerUpdate,omitempty"`
-	SmartScaler bool `json:"smartScaler,omitempty"`
+	AutoScaler bool `json:"autoScaler,omitempty"`
+	VerUpdate  bool `json:"VerUpdate,omitempty"`
+	// +kubebuilder:default=true
+	// +kubebuilder:validation:Required
+	SmartScaler bool `json:"smartScaler"`
 }
 
 type MonitoringConfig struct {
@@ -238,6 +246,8 @@ type DashboardsConfig struct {
 	// Set security context for the dashboards pods' container
 	SecurityContext   *corev1.SecurityContext `json:"securityContext,omitempty"`
 	PriorityClassName string                  `json:"priorityClassName,omitempty"`
+	// OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set.
+	OpenSearchDashboardsHome string `json:"opensearchDashboardsHome,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -454,6 +464,25 @@ type OpenSearchClusterList struct {
 
 func init() {
 	SchemeBuilder.Register(&OpenSearchCluster{}, &OpenSearchClusterList{})
+}
+
+const (
+	DefaultOpenSearchHome           = "/usr/share/opensearch"
+	DefaultOpenSearchDashboardsHome = "/usr/share/opensearch-dashboards"
+)
+
+func (g GeneralConfig) GetOpenSearchHome() string {
+	if g.OpenSearchHome != "" {
+		return strings.TrimRight(g.OpenSearchHome, "/")
+	}
+	return DefaultOpenSearchHome
+}
+
+func (d DashboardsConfig) GetOpenSearchDashboardsHome() string {
+	if d.OpenSearchDashboardsHome != "" {
+		return strings.TrimRight(d.OpenSearchDashboardsHome, "/")
+	}
+	return DefaultOpenSearchDashboardsHome
 }
 
 func (s ImageSpec) GetImagePullPolicy() (_ corev1.PullPolicy) {

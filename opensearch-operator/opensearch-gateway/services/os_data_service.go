@@ -10,11 +10,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/go-logr/logr"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -41,18 +41,40 @@ func HasIndicesWithNoReplica(service *OsClusterClient) (bool, error) {
 	return false, err
 }
 
+// extractNodeName returns the actual node name from the NodeName field.
+// During shard relocation, _cat/shards returns a format like:
+// "opensearch-data-1 -> 172.31.233.51 4kGSHQhmRQ-83pvvBbTYow opensearch-data-8".
+// This extracts the source node name (first token) for correct comparison.
+func extractNodeName(fullNodeName string) string {
+	if fullNodeName == "" {
+		return ""
+	}
+	trimmed := strings.TrimSpace(fullNodeName)
+	fields := strings.Fields(trimmed)
+	if len(fields) > 0 {
+		return fields[0]
+	}
+	return trimmed
+}
+
+// hasShardsOnNodeFromResponse returns true if any shard in the response is on the given node.
+// It uses extractNodeName so that relocation format (source -> ip id target) is handled correctly.
+func hasShardsOnNodeFromResponse(response []responses.CatShardsResponse, nodeName string) bool {
+	for _, shardsData := range response {
+		if extractNodeName(shardsData.NodeName) == nodeName {
+			return true
+		}
+	}
+	return false
+}
+
 func HasShardsOnNode(service *OsClusterClient, nodeName string) (bool, error) {
 	var headers []string
 	response, err := service.CatShards(headers)
 	if err != nil {
 		return false, err
 	}
-	for _, shardsData := range response {
-		if shardsData.NodeName == nodeName {
-			return true, err
-		}
-	}
-	return false, err
+	return hasShardsOnNodeFromResponse(response, nodeName), err
 }
 
 func HasIndexPrimariesOnNode(service *OsClusterClient, nodeName string, indices []string) (bool, error) {
@@ -67,7 +89,7 @@ func HasIndexPrimariesOnNode(service *OsClusterClient, nodeName string, indices 
 			return true, nil
 		}
 		// If there are system shards on the node consider it not empty
-		if shardsData.NodeName == nodeName && shardsData.PrimaryOrReplica == "p" {
+		if extractNodeName(shardsData.NodeName) == nodeName && shardsData.PrimaryOrReplica == "p" {
 			return true, nil
 		}
 	}
@@ -642,10 +664,16 @@ func DetectShardStuckVersionMismatch(service *OsClusterClient, shard responses.C
 
 	// Check if allocation is blocked by node_version decider
 	// Detect these two cases:
-	// 1. the shard is unassigned and cannot be assigned to any node, due to version misnatch
+	// 1. the shard is unassigned and cannot be assigned to any node, due to version mismatch
 	// 2. the shard is assigned, shall be moved, but cannot be moved to another node
-	isStuck := (explain.CurrentState == "unassigned" && explain.CanAllocate == "no") ||
-		(explain.CurrentState == "assigned" && explain.CanRemainOnCurrentNode == "no" && explain.CanMoveToOtherNode == "no")
+	isUnassignedAndCannotAllocate := explain.CurrentState == "unassigned" && explain.CanAllocate == "no"
+
+	isAssignedOrStarted := explain.CurrentState == "assigned" || explain.CurrentState == "started"
+	cannotRemainOnCurrentNode := explain.CanRemainOnCurrentNode == "no"
+	cannotMoveToOtherNode := explain.CanMoveToOtherNode == "no"
+	isAssignedButCannotMove := isAssignedOrStarted && cannotRemainOnCurrentNode && cannotMoveToOtherNode
+
+	isStuck := isUnassignedAndCannotAllocate || isAssignedButCannotMove
 	if !isStuck {
 		return false, nil
 	}

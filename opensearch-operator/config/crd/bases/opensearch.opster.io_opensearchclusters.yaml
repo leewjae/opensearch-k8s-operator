@@ -1278,7 +1278,10 @@ spec:
                   autoScaler:
                     type: boolean
                   smartScaler:
+                    default: true
                     type: boolean
+                required:
+                - smartScaler
                 type: object
               dashboards:
                 properties:
@@ -3016,6 +3019,11 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                  opensearchDashboardsHome:
+                    description: OpenSearch Dashboards installation directory inside
+                      the container. Defaults to /usr/share/opensearch-dashboards
+                      if not set.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -4455,6 +4463,10 @@ spec:
                       - ip
                       type: object
                     type: array
+                  hostNetwork:
+                    description: HostNetwork enables host networking for all pods
+                      in the cluster.
+                    type: boolean
                   httpPort:
                     default: 9200
                     format: int32
@@ -4530,6 +4542,10 @@ spec:
                             type: string
                         type: object
                     type: object
+                  opensearchHome:
+                    description: OpenSearch installation directory inside the container.
+                      Defaults to /usr/share/opensearch if not set.
+                    type: string
                   operatorClusterURL:
                     description: |-
                       Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch

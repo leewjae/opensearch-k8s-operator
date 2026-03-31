@@ -2,6 +2,8 @@
 
 This guide is intended for users of the Opensearch Operator. If you want to contribute to the development of the Operator, please see the [Design documents](../designs/high-level.md) and the [Developer guide](../developing.md) instead.
 
+> **API Group Migration Notice**: The operator is migrating from `opensearch.opster.io` to `opensearch.org` API group. Both are currently supported, but `opensearch.opster.io` is deprecated. Please see the [Migration Guide](./migration-guide.md) for details.
+
 ## Installation
 
 The Operator can be easily installed using Helm:
@@ -11,7 +13,7 @@ The Operator can be easily installed using Helm:
 
 Follow the instructions in this video to install the Operator:
 
-[![Watch the video](https://opster.com/wp-content/uploads/2022/05/Operator-Installation-Tutorial.png)](https://player.vimeo.com/video/708641527)
+[![Watch the video](https://github.com/user-attachments/assets/3e8881b4-4b93-4322-86e2-f46baa01cad0)](https://pulse.support/kb/running-opensearch-on-kubernetes-video-tutorial-series)
 
 A few notes on operator releases:
 
@@ -40,10 +42,10 @@ metadata:
 spec:
   general:
     serviceName: my-first-cluster
-    version: 3
+    version: "3"
   dashboards:
     enable: true
-    version: 3
+    version: "3"
     replicas: 1
     resources:
       requests:
@@ -74,7 +76,7 @@ Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch 
 Run `kubectl port-forward svc/my-first-cluster-dashboards 5601`, then open [http://localhost:5601](http://localhost:5601) in your browser and log in with the default demo credentials `admin / admin`.
 Alternatively, if you want to access the OpenSearch REST API, run: `kubectl port-forward svc/my-first-cluster 9200`. Then open a second terminal and run: `curl -k -u admin:admin https://localhost:9200/_cat/nodes?v`. You should see the three deployed pods listed.
 
-If you'd like to delete your cluster, run: `kubectl delete -f cluster.yaml`. The Operator will then clean up and delete any Kubernetes resources created for the cluster. Note that this will not delete the persistent volumes for the cluster, in most cases. For a complete cleanup, run: `kubectl delete pvc -l opster.io/opensearch-cluster=my-first-cluster` to also delete the PVCs.
+If you'd like to delete your cluster, run: `kubectl delete -f cluster.yaml`. The Operator will then clean up and delete any Kubernetes resources created for the cluster. Note that this will not delete the persistent volumes for the cluster, in most cases. For a complete cleanup, run: `kubectl delete pvc -l opensearch.org/opensearch-cluster=my-first-cluster` to also delete the PVCs.
 
 The minimal cluster you deployed in this section is only intended for demo purposes. Please see the next sections on how to configure and manage the different aspects of your cluster.
 
@@ -819,7 +821,7 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchLabels:
-                  opster.io/opensearch-cluster: my-cluster
+                  opensearch.org/opensearch-cluster: my-cluster
               topologyKey: kubernetes.io/hostname
   bootstrap:
     affinity:
@@ -829,7 +831,7 @@ spec:
             podAffinityTerm:
               labelSelector:
                 matchLabels:
-                  opster.io/opensearch-cluster: my-cluster
+                  opensearch.org/opensearch-cluster: my-cluster
               topologyKey: kubernetes.io/hostname
   dashboards:
     enable: true
@@ -890,7 +892,7 @@ Sidecar containers share the same network namespace and storage volumes as the O
 
 ### Additional Volumes
 
-Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, or CSI volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files). This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
+Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, CSI volumes, NFS volumes, or hostPath volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files). This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
 
 ```yaml
 spec:
@@ -929,6 +931,11 @@ spec:
           server: 192.168.1.233
           path: /export/backups/opensearch
           readOnly: false # Optional, defaults to false
+      - name: hostpath-volume
+        path: /host/data
+        hostPath:
+          path: /var/lib/opensearch
+          type: DirectoryOrCreate # Optional, can be Directory, DirectoryOrCreate, File, FileOrCreate, Socket, CharDevice, or BlockDevice
   dashboards:
     additionalVolumes:
       - name: example-secret
@@ -970,6 +977,43 @@ spec:
         settings:
           location: /mnt/backups/opensearch
 ```
+
+#### HostPath Volume Support
+
+HostPath volumes allow you to mount a file or directory from the host node's filesystem into your OpenSearch pods. This is useful for accessing host-specific data, but should be used with caution as it can create security and portability issues.
+
+> **Warning:** HostPath volumes are strongly discouraged in production environments as they:
+> - Create security risks by allowing pods to access the host filesystem
+> - Reduce portability across different nodes
+> - Can cause issues if pods are scheduled on different nodes
+>
+> Consider using PersistentVolumeClaims, NFS, or other network storage solutions instead.
+
+To configure a hostPath volume, specify the `hostPath` field with the required `path` parameter:
+
+```yaml
+spec:
+  general:
+    additionalVolumes:
+      - name: hostpath-data
+        path: /host/data
+        hostPath:
+          path: /var/lib/opensearch
+          type: DirectoryOrCreate # Optional, defaults to empty string
+```
+
+The `type` field is optional and can be one of:
+- `Directory` - Directory must exist on the host
+- `DirectoryOrCreate` - Directory will be created if it doesn't exist
+- `File` - File must exist on the host
+- `FileOrCreate` - File will be created if it doesn't exist
+- `Socket` - Unix socket must exist on the host
+- `CharDevice` - Character device must exist on the host
+- `BlockDevice` - Block device must exist on the host
+
+If `type` is not specified, the path must exist and be of the correct type.
+
+> **Note:** When using hostPath volumes, ensure proper pod anti-affinity rules are configured to prevent multiple pods from scheduling on the same node, which could cause data conflicts.
 
 The defined volumes are added to all pods of the opensearch cluster. It is currently not possible to define them per nodepool.
 
@@ -1058,6 +1102,20 @@ manager:
     - name: SKIP_INIT_CONTAINER
       value: "true"
 ```
+
+### Custom OpenSearch Path
+
+By default, the operator assumes OpenSearch is installed at `/usr/share/opensearch` inside the container (and `/usr/share/opensearch-dashboards` for Dashboards). If you use a custom OpenSearch image with a different installation directory, you can override these paths:
+
+```yaml
+spec:
+  general:
+    opensearchHome: "/opt/opensearch"
+  dashboards:
+    opensearchDashboardsHome: "/opt/opensearch-dashboards"
+```
+
+The operator uses these paths for all volume mounts (data, config, TLS certificates, keystore, security plugin) and init container commands. When not set, the defaults are used. Any trailing slashes in the provided path are automatically removed.
 
 ### PodDisruptionBudget
 
@@ -1225,7 +1283,7 @@ spec:
         cpu: "200m"
 ```
 
-You can also configure the resources for the security update job as shown below.
+You can also configure the resources and scheduling options for the security update job as shown below.
 
 ```yaml
 apiVersion: opensearch.dremio.io/v1
@@ -1243,6 +1301,8 @@ spec:
             cpu: "100m"
             memory: "100Mi"
 ```
+
+The `updateJob` also supports standard Kubernetes scheduling options: `nodeSelector`, `tolerations`, `affinity`, `labels`, and `priorityClassName`.
 
 Please note that the examples provided here do not reflect actual resource requirements. You may need to conduct further testing to properly adjust the resources based on your specific needs.
 

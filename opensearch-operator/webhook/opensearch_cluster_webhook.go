@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,22 +39,30 @@ func (v *OpenSearchClusterValidator) SetupWithManager(mgr ctrl.Manager) error {
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opsterv1.OpenSearchCluster{}).
+		For(&opensearchv1.OpenSearchCluster{}).
 		WithValidator(v).
 		Complete()
 }
 
 func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	cluster := obj.(*opsterv1.OpenSearchCluster)
+	cluster := obj.(*opensearchv1.OpenSearchCluster)
+	if err := validateNodePoolComponentUniqueness(cluster); err != nil {
+		return nil, err
+	}
 	return v.validateTlsConfig(cluster)
 }
 
 func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldCluster := oldObj.(*opsterv1.OpenSearchCluster)
-	newCluster := newObj.(*opsterv1.OpenSearchCluster)
+	oldCluster := oldObj.(*opensearchv1.OpenSearchCluster)
+	newCluster := newObj.(*opensearchv1.OpenSearchCluster)
 
 	if !newCluster.DeletionTimestamp.IsZero() {
 		return nil, nil
+	}
+
+	// Validate no duplicate node pool component names (component is used for K8s resource names)
+	if err := validateNodePoolComponentUniqueness(newCluster); err != nil {
+		return nil, err
 	}
 
 	// Validate storage class changes - storage class is immutable in StatefulSets
@@ -65,9 +73,26 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 	return v.validateTlsConfig(newCluster)
 }
 
-func (v *OpenSearchClusterValidator) validateStorageClassChanges(oldCluster, newCluster *opsterv1.OpenSearchCluster) error {
+// validateNodePoolComponentUniqueness ensures no two node pools share the same component name,
+// since component is used to name K8s resources (StatefulSets, Services, ConfigMaps, Secrets) per node pool.
+func validateNodePoolComponentUniqueness(cluster *opensearchv1.OpenSearchCluster) error {
+	seen := make(map[string]struct{})
+	for i := range cluster.Spec.NodePools {
+		component := cluster.Spec.NodePools[i].Component
+		if component == "" {
+			return fmt.Errorf("node pool at index %d has an empty component name", i)
+		}
+		if _, exists := seen[component]; exists {
+			return fmt.Errorf("duplicate node pool component name '%s': each node pool must have a unique component name (used for K8s resource naming)", component)
+		}
+		seen[component] = struct{}{}
+	}
+	return nil
+}
+
+func (v *OpenSearchClusterValidator) validateStorageClassChanges(oldCluster, newCluster *opensearchv1.OpenSearchCluster) error {
 	// Create a map of old node pools by component name for easy lookup
-	oldNodePools := make(map[string]*opsterv1.NodePool)
+	oldNodePools := make(map[string]*opensearchv1.NodePool)
 	for i := range oldCluster.Spec.NodePools {
 		nodePool := &oldCluster.Spec.NodePools[i]
 		oldNodePools[nodePool.Component] = nodePool
@@ -112,7 +137,7 @@ func (v *OpenSearchClusterValidator) validateStorageClassChanges(oldCluster, new
 	return nil
 }
 
-func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opsterv1.OpenSearchCluster) (admission.Warnings, error) {
+func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opensearchv1.OpenSearchCluster) (admission.Warnings, error) {
 	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
 		return nil, nil
 	}

@@ -3,15 +3,16 @@ package builders
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"k8s.io/utils/ptr"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,7 +30,7 @@ var (
 )
 
 const (
-	ConfigurationChecksumAnnotation  = "opster.io/config"
+	ConfigurationChecksumAnnotation  = "opensearch.org/config"
 	defaultMonitoringPlugin          = "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
@@ -66,8 +67,8 @@ func getAffinity(affinity *corev1.Affinity, clusterName string) *corev1.Affinity
 
 func NewSTSForNodePool(
 	username string,
-	cr *opsterv1.OpenSearchCluster,
-	node opsterv1.NodePool,
+	cr *opensearchv1.OpenSearchCluster,
+	node opensearchv1.NodePool,
 	configChecksum string,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
@@ -163,9 +164,10 @@ func NewSTSForNodePool(
 		}
 	}
 
+	opensearchHome := cr.Spec.General.GetOpenSearchHome()
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "data",
-		MountPath: "/usr/share/opensearch/data",
+		MountPath: opensearchHome + "/data",
 	})
 
 	labels := map[string]string{
@@ -416,14 +418,14 @@ func NewSTSForNodePool(
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Resources:       resources,
 			Command:         []string{"sh", "-c"},
-			Args:            []string{helpers.GetChownCommand(uid, gid, "/usr/share/opensearch/data")},
+			Args:            []string{helpers.GetChownCommand(uid, gid, opensearchHome+"/data")},
 			SecurityContext: &corev1.SecurityContext{
 				RunAsUser: &runas,
 			},
 			VolumeMounts: []corev1.VolumeMount{
 				{
 					Name:      "data",
-					MountPath: "/usr/share/opensearch/data",
+					MountPath: opensearchHome + "/data",
 				},
 			},
 		})
@@ -442,7 +444,7 @@ func NewSTSForNodePool(
 
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "keystore",
-			MountPath: "/usr/share/opensearch/config/opensearch.keystore",
+			MountPath: opensearchHome + "/config/opensearch.keystore",
 			SubPath:   "opensearch.keystore",
 		})
 
@@ -490,27 +492,27 @@ func NewSTSForNodePool(
 			Command: []string{
 				"sh",
 				"-c",
-				`
+				fmt.Sprintf(`
 				#!/usr/bin/env bash
 				set -euo pipefail
 
-				if [ ! -f /usr/share/opensearch/config/opensearch.keystore ]; then
-				  /usr/share/opensearch/bin/opensearch-keystore create
+				if [ ! -f %[1]s/config/opensearch.keystore ]; then
+				  %[1]s/bin/opensearch-keystore create
 				fi
 				for i in /tmp/keystoreSecrets/*/*; do
 				  key=$(basename $i)
 				  echo "Adding file $i to keystore key $key"
-				  /usr/share/opensearch/bin/opensearch-keystore add-file "$key" "$i" --force
+				  %[1]s/bin/opensearch-keystore add-file "$key" "$i" --force
 				done
 
 				# Add the bootstrap password since otherwise the opensearch entrypoint tries to do this on startup
 				if [ ! -z ${PASSWORD+x} ]; then
 				  echo 'Adding env $PASSWORD to keystore as key bootstrap.password'
-				  echo "$PASSWORD" | /usr/share/opensearch/bin/opensearch-keystore add -x bootstrap.password
+				  echo "$PASSWORD" | %[1]s/bin/opensearch-keystore add -x bootstrap.password
 				fi
 
-				cp -a /usr/share/opensearch/config/opensearch.keystore /tmp/keystore/
-				`,
+				cp -a %[1]s/config/opensearch.keystore /tmp/keystore/
+				`, opensearchHome),
 			},
 			VolumeMounts:    initContainerVolumeMounts,
 			SecurityContext: securityContext,
@@ -590,16 +592,26 @@ func NewSTSForNodePool(
 							Image:           image.GetImage(),
 							ImagePullPolicy: image.GetImagePullPolicy(),
 							Resources:       node.Resources,
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "http",
-									ContainerPort: cr.Spec.General.HttpPort,
-								},
-								{
-									Name:          "transport",
-									ContainerPort: 9300,
-								},
-							},
+							Ports: func() []corev1.ContainerPort {
+								ports := []corev1.ContainerPort{
+									{
+										Name:          "http",
+										ContainerPort: cr.Spec.General.HttpPort,
+									},
+									{
+										Name:          "transport",
+										ContainerPort: 9300,
+									},
+								}
+								// Add gRPC port if enabled
+								if grpcPort := getGrpcPort(cr); grpcPort > 0 {
+									ports = append(ports, corev1.ContainerPort{
+										Name:          "grpc",
+										ContainerPort: grpcPort,
+									})
+								}
+								return ports
+							}(),
 							StartupProbe:    &startupProbe,
 							LivenessProbe:   &livenessProbe,
 							ReadinessProbe:  &readinessProbe,
@@ -618,6 +630,7 @@ func NewSTSForNodePool(
 					PriorityClassName:         node.PriorityClassName,
 					SecurityContext:           podSecurityContext,
 					HostAliases:               cr.Spec.General.HostAliases,
+					HostNetwork:               cr.Spec.General.HostNetwork,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
@@ -666,7 +679,7 @@ func NewSTSForNodePool(
 	return sts
 }
 
-func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
+func NewHeadlessServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel:  cr.Name,
 		helpers.NodePoolLabel: nodePool.Component,
@@ -726,7 +739,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 	}
 }
 
-func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+func NewServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -748,51 +761,67 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 			Annotations: cr.Spec.General.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{
-					Name:     "http",
-					Protocol: "TCP",
-					Port:     cr.Spec.General.HttpPort,
-					TargetPort: intstr.IntOrString{
-						IntVal: cr.Spec.General.HttpPort,
+			Ports: func() []corev1.ServicePort {
+				ports := []corev1.ServicePort{
+					{
+						Name:     "http",
+						Protocol: "TCP",
+						Port:     cr.Spec.General.HttpPort,
+						TargetPort: intstr.IntOrString{
+							IntVal: cr.Spec.General.HttpPort,
+						},
+						AppProtocol: &httpAppProtocol,
 					},
-					AppProtocol: &httpAppProtocol,
-				},
-				{
-					Name:     "transport",
-					Protocol: "TCP",
-					Port:     9300,
-					TargetPort: intstr.IntOrString{
-						IntVal: 9300,
-						StrVal: "9300",
+					{
+						Name:     "transport",
+						Protocol: "TCP",
+						Port:     9300,
+						TargetPort: intstr.IntOrString{
+							IntVal: 9300,
+							StrVal: "9300",
+						},
 					},
-				},
-				{
-					Name:     "metrics",
-					Protocol: "TCP",
-					Port:     9600,
-					TargetPort: intstr.IntOrString{
-						IntVal: 9600,
-						StrVal: "9600",
+					{
+						Name:     "metrics",
+						Protocol: "TCP",
+						Port:     9600,
+						TargetPort: intstr.IntOrString{
+							IntVal: 9600,
+							StrVal: "9600",
+						},
 					},
-				},
-				{
-					Name:     "rca",
-					Protocol: "TCP",
-					Port:     9650,
-					TargetPort: intstr.IntOrString{
-						IntVal: 9650,
-						StrVal: "9650",
+					{
+						Name:     "rca",
+						Protocol: "TCP",
+						Port:     9650,
+						TargetPort: intstr.IntOrString{
+							IntVal: 9650,
+							StrVal: "9650",
+						},
 					},
-				},
-			},
+				}
+				// Add gRPC port if enabled
+				if grpcPort := getGrpcPort(cr); grpcPort > 0 {
+					grpcAppProtocol := "grpc"
+					ports = append(ports, corev1.ServicePort{
+						Name:     "grpc",
+						Protocol: "TCP",
+						Port:     grpcPort,
+						TargetPort: intstr.IntOrString{
+							IntVal: grpcPort,
+						},
+						AppProtocol: &grpcAppProtocol,
+					})
+				}
+				return ports
+			}(),
 			Selector: labels,
 			Type:     "",
 		},
 	}
 }
 
-func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+func NewDiscoveryServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -822,7 +851,7 @@ func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	}
 }
 
-func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+func NewNodePortService(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -861,7 +890,7 @@ func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 }
 
 func NewBootstrapPod(
-	cr *opsterv1.OpenSearchCluster,
+	cr *opensearchv1.OpenSearchCluster,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 ) *corev1.Pod {
@@ -906,9 +935,10 @@ func NewBootstrapPod(
 		},
 	})
 
+	opensearchHome := cr.Spec.General.GetOpenSearchHome()
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "data",
-		MountPath: "/usr/share/opensearch/data",
+		MountPath: opensearchHome + "/data",
 	})
 
 	podSecurityContext := cr.Spec.General.PodSecurityContext
@@ -981,14 +1011,14 @@ func NewBootstrapPod(
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Resources:       cr.Spec.InitHelper.Resources,
 			Command:         []string{"sh", "-c"},
-			Args:            []string{helpers.GetChownCommand(uid, gid, "/usr/share/opensearch/data")},
+			Args:            []string{helpers.GetChownCommand(uid, gid, opensearchHome+"/data")},
 			SecurityContext: &corev1.SecurityContext{
 				RunAsUser: ptr.To(int64(0)),
 			},
 			VolumeMounts: []corev1.VolumeMount{
 				{
 					Name:      "data",
-					MountPath: "/usr/share/opensearch/data",
+					MountPath: opensearchHome + "/data",
 				},
 			},
 		})
@@ -1007,7 +1037,7 @@ func NewBootstrapPod(
 
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "keystore",
-			MountPath: "/usr/share/opensearch/config/opensearch.keystore",
+			MountPath: opensearchHome + "/config/opensearch.keystore",
 			SubPath:   "opensearch.keystore",
 		})
 
@@ -1055,27 +1085,27 @@ func NewBootstrapPod(
 			Command: []string{
 				"sh",
 				"-c",
-				`
+				fmt.Sprintf(`
 				#!/usr/bin/env bash
 				set -euo pipefail
 
-				if [ ! -f /usr/share/opensearch/config/opensearch.keystore ]; then
-				  /usr/share/opensearch/bin/opensearch-keystore create
+				if [ ! -f %[1]s/config/opensearch.keystore ]; then
+				  %[1]s/bin/opensearch-keystore create
 				fi
 				for i in /tmp/keystoreSecrets/*/*; do
 				  key=$(basename $i)
 				  echo "Adding file $i to keystore key $key"
-				  /usr/share/opensearch/bin/opensearch-keystore add-file "$key" "$i" --force
+				  %[1]s/bin/opensearch-keystore add-file "$key" "$i" --force
 				done
 
 				# Add the bootstrap password since otherwise the opensearch entrypoint tries to do this on startup
 				if [ ! -z ${PASSWORD+x} ]; then
 				  echo 'Adding env $PASSWORD to keystore as key bootstrap.password'
-				  echo "$PASSWORD" | /usr/share/opensearch/bin/opensearch-keystore add -x bootstrap.password
+				  echo "$PASSWORD" | %[1]s/bin/opensearch-keystore add -x bootstrap.password
 				fi
 
-				cp -a /usr/share/opensearch/config/opensearch.keystore /tmp/keystore/
-				`,
+				cp -a %[1]s/config/opensearch.keystore /tmp/keystore/
+				`, opensearchHome),
 			},
 			VolumeMounts:    initContainerVolumeMounts,
 			SecurityContext: securityContext,
@@ -1114,17 +1144,27 @@ func NewBootstrapPod(
 					Command:         mainCommand,
 					Image:           image.GetImage(),
 					ImagePullPolicy: image.GetImagePullPolicy(),
-					Resources:       containerResources,
-					Ports: []corev1.ContainerPort{
-						{
-							Name:          "http",
-							ContainerPort: cr.Spec.General.HttpPort,
-						},
-						{
-							Name:          "transport",
-							ContainerPort: 9300,
-						},
-					},
+					Resources:       resources,
+					Ports: func() []corev1.ContainerPort {
+						ports := []corev1.ContainerPort{
+							{
+								Name:          "http",
+								ContainerPort: cr.Spec.General.HttpPort,
+							},
+							{
+								Name:          "transport",
+								ContainerPort: 9300,
+							},
+						}
+						// Add gRPC port if enabled
+						if grpcPort := getGrpcPort(cr); grpcPort > 0 {
+							ports = append(ports, corev1.ContainerPort{
+								Name:          "grpc",
+								ContainerPort: grpcPort,
+							})
+						}
+						return ports
+					}(),
 					StartupProbe:    &probe,
 					LivenessProbe:   &probe,
 					VolumeMounts:    volumeMounts,
@@ -1141,6 +1181,7 @@ func NewBootstrapPod(
 			SecurityContext:    podSecurityContext,
 			HostAliases:        hostAliases,
 			PriorityClassName:  cr.Spec.Bootstrap.PriorityClassName,
+			HostNetwork:        cr.Spec.General.HostNetwork,
 		},
 	}
 
@@ -1164,7 +1205,7 @@ func NewBootstrapPod(
 	return pod
 }
 
-func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
+func PortForCluster(cr *opensearchv1.OpenSearchCluster) int32 {
 	httpPort := int32(9200)
 	if cr.Spec.General.HttpPort > 0 {
 		httpPort = cr.Spec.General.HttpPort
@@ -1172,11 +1213,36 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 	return httpPort
 }
 
-func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
+// getGrpcPort extracts the first port from the gRPC port configuration
+// Port can be a range like "9400-9500" or a single port like "9400"
+// Returns the first port in the range, or 9400 as default
+func getGrpcPort(cr *opensearchv1.OpenSearchCluster) int32 {
+	grpcConfig := cr.Spec.General.Grpc
+	if grpcConfig == nil || !grpcConfig.Enable {
+		return 0
+	}
+
+	port := grpcConfig.Port
+	if port == "" {
+		port = "9400-9500"
+	}
+
+	// Extract first port from range (e.g., "9400-9500" -> 9400)
+	parts := strings.Split(port, "-")
+	if len(parts) > 0 {
+		if firstPort, err := strconv.ParseInt(parts[0], 10, 32); err == nil && firstPort > 0 {
+			return int32(firstPort)
+		}
+	}
+
+	return 9400 // Default
+}
+
+func URLForCluster(cr *opensearchv1.OpenSearchCluster) string {
 	return helpers.ClusterURL(cr)
 }
 
-func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {
+func PasswordSecret(cr *opensearchv1.OpenSearchCluster, username, password string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-admin-password", cr.Name),
@@ -1189,23 +1255,23 @@ func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *
 	}
 }
 
-func DnsOfService(cr *opsterv1.OpenSearchCluster) string {
+func DnsOfService(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s.%s", cr.Spec.General.ServiceName, cr.Namespace)
 }
 
-func StsName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string {
+func StsName(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) string {
 	return cr.Name + "-" + nodePool.Component
 }
 
-func DiscoveryServiceName(cr *opsterv1.OpenSearchCluster) string {
+func DiscoveryServiceName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-discovery", cr.Name)
 }
 
-func BootstrapPodName(cr *opsterv1.OpenSearchCluster) string {
+func BootstrapPodName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-bootstrap-0", cr.Name)
 }
 
-func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeClaim {
+func NewBootstrapPVC(cr *opensearchv1.OpenSearchCluster) *corev1.PersistentVolumeClaim {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -1232,6 +1298,7 @@ func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeCla
 					corev1.ResourceStorage: storageSize,
 				},
 			},
+			StorageClassName: cr.Spec.Bootstrap.StorageClassName,
 		},
 	}
 }
@@ -1259,7 +1326,7 @@ func sanitizeContainerResources(res corev1.ResourceRequirements) corev1.Resource
 	return *cleaned
 }
 
-func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
+func STSInNodePools(sts appsv1.StatefulSet, nodepools []opensearchv1.NodePool) bool {
 	for _, nodepool := range nodepools {
 		if sts.Labels[helpers.NodePoolLabel] == nodepool.Component {
 			return true
@@ -1269,7 +1336,7 @@ func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool 
 }
 
 func NewSecurityconfigUpdateJob(
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	jobName string,
 	namespace string,
 	checksum string,
@@ -1279,7 +1346,7 @@ func NewSecurityconfigUpdateJob(
 	volumeMounts []corev1.VolumeMount,
 ) batchv1.Job {
 	// Dummy node spec required to resolve image
-	node := opsterv1.NodePool{
+	node := opensearchv1.NodePool{
 		Component: "securityconfig",
 	}
 
@@ -1304,6 +1371,9 @@ func NewSecurityconfigUpdateJob(
 	updateJobConfig := instance.Spec.Security.GetConfig().GetUpdateJob()
 	resources := updateJobConfig.Resources
 	priorityClassName := updateJobConfig.PriorityClassName
+	tolerations := updateJobConfig.Tolerations
+	nodeSelector := updateJobConfig.NodeSelector
+	affinity := updateJobConfig.Affinity
 
 	// Build labels for Job and Pod template
 	jobLabels := map[string]string{
@@ -1353,13 +1423,17 @@ func NewSecurityconfigUpdateJob(
 					ImagePullSecrets:   image.ImagePullSecrets,
 					SecurityContext:    podSecurityContext,
 					PriorityClassName:  priorityClassName,
+					HostNetwork:        instance.Spec.General.HostNetwork,
+					Tolerations:        tolerations,
+					NodeSelector:       nodeSelector,
+					Affinity:           affinity,
 				},
 			},
 		},
 	}
 }
 
-func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) bool {
+func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearchv1.OpenSearchCluster) bool {
 	wrappedClient := k8s.NewK8sClient(k8sClient, ctx)
 	for _, nodePool := range cr.Spec.NodePools {
 		masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
@@ -1385,7 +1459,7 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 	return true
 }
 
-func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonitor {
+func NewServiceMonitor(cr *opensearchv1.OpenSearchCluster) *monitoring.ServiceMonitor {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}

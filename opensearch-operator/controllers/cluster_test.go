@@ -10,12 +10,12 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/utils/ptr"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -169,7 +169,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			for _, nodePool := range OpensearchCluster.Spec.NodePools {
 				wg.Add(1)
 				By(fmt.Sprintf("checking %s nodepool", nodePool.Component))
-				go func(nodePool opsterv1.NodePool) {
+				go func(nodePool opensearchv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					// Calculate expected node.roles value
@@ -342,7 +342,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			for _, nodePool := range OpensearchCluster.Spec.NodePools {
 				wg.Add(1)
 				By(fmt.Sprintf("checking %s nodepool initial master", nodePool.Component))
-				go func(nodePool opsterv1.NodePool) {
+				go func(nodePool opensearchv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					Eventually(func() []corev1.EnvVar {
@@ -392,7 +392,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			for _, nodePool := range OpensearchCluster.Spec.NodePools {
 				wg.Add(1)
 				By(fmt.Sprintf("checking %s nodepool initial master", nodePool.Component))
-				go func(nodePool opsterv1.NodePool) {
+				go func(nodePool opensearchv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					Eventually(func() []corev1.EnvVar {
@@ -452,11 +452,15 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 
 			// Update the opensearch object
 			OpensearchCluster.Spec.NodePools = OpensearchCluster.Spec.NodePools[:2]
-			OpensearchCluster.Spec.General.Version = "3.3.0"
-			OpensearchCluster.Spec.General.PluginsList[0] = "http://foo-plugin-3.3.0"
+			OpensearchCluster.Spec.General.Version = "3.4.0"
+			OpensearchCluster.Spec.General.PluginsList[0] = "http://foo-plugin-3.4.0"
 			Expect(k8sClient.Update(context.Background(), &OpensearchCluster)).Should(Succeed())
 
 			Eventually(func() bool {
+				// Simulate the StatefulSet controller by marking all STS as ready,
+				// so that nodePoolsReady() in the scaler reconciler passes.
+				_ = MarkStsReady(k8sClient, OpensearchCluster.Namespace)
+
 				stsList := &appsv1.StatefulSetList{}
 				err := k8sClient.List(context.Background(), stsList, client.InNamespace(OpensearchCluster.Name))
 				if err != nil {
@@ -474,7 +478,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 					if err != nil {
 						return false
 					}
-					return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.3.0"
+					return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.4.0"
 				}).Should(BeTrue())
 			}
 		})
@@ -482,7 +486,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 
 	When("A node pool is upgrading", func() {
 		Specify("updating the status should succeed", func() {
-			status := opsterv1.ComponentStatus{
+			status := opensearchv1.ComponentStatus{
 				Component:   "Upgrader",
 				Description: "nodes",
 				Status:      "Upgrading",
@@ -507,7 +511,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 					}, sts); err != nil {
 					return false
 				}
-				return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.3.0"
+				return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.4.0"
 			}, timeout, interval).Should(BeTrue())
 		})
 		It("should update any plugin URLs", func() {
@@ -521,23 +525,23 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 					}, sts); err != nil {
 					return false
 				}
-				return ArrayElementContains(sts.Spec.Template.Spec.Containers[0].Command, "http://foo-plugin-3.3.0")
+				return ArrayElementContains(sts.Spec.Template.Spec.Containers[0].Command, "http://foo-plugin-3.4.0")
 			}, timeout, interval).Should(BeTrue())
 		})
 	})
 	When("a cluster is upgraded", func() {
 		Specify("updating the status should succeed", func() {
-			currentStatus := opsterv1.ComponentStatus{
+			currentStatus := opensearchv1.ComponentStatus{
 				Component:   "Upgrader",
 				Status:      "Upgrading",
 				Description: "nodes",
 			}
-			componentStatus := opsterv1.ComponentStatus{
+			componentStatus := opensearchv1.ComponentStatus{
 				Component:   "Upgrader",
 				Status:      "Upgraded",
 				Description: "nodes",
 			}
-			masterComponentStatus := opsterv1.ComponentStatus{
+			masterComponentStatus := opensearchv1.ComponentStatus{
 				Component:   "Upgrader",
 				Status:      "Upgraded",
 				Description: "master",
@@ -562,14 +566,14 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return false
 				}
-				return OpensearchCluster.Status.Version == "3.3.0"
+				return OpensearchCluster.Status.Version == "3.4.0"
 			}, timeout, interval)
 		})
 		It("should update all the node pools", func() {
 			wg := sync.WaitGroup{}
 			for _, nodePool := range OpensearchCluster.Spec.NodePools {
 				wg.Add(1)
-				go func(nodePool opsterv1.NodePool) {
+				go func(nodePool opensearchv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					Eventually(func() bool {
@@ -580,7 +584,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 						}, sts); err != nil {
 							return false
 						}
-						return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.3.0"
+						return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.4.0"
 					}, timeout, interval).Should(BeTrue())
 				}(nodePool)
 			}
