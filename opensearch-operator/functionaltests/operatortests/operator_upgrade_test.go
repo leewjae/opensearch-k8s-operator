@@ -112,7 +112,7 @@ var _ = Describe("OperatorUpgrade", func() {
 		GinkgoWriter.Printf("  + Data node pool ready: 3/3 replicas\n")
 
 		By("Step 3: Initializing test data manager and verifying cluster")
-		// Use new API group (opensearch.org/v1)
+		// Use opensearch.dremio.io/v1 API group
 		dataManager, err = NewTestDataManager(k8sClient, clusterName, namespace)
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Test data manager initialized\n")
@@ -368,7 +368,7 @@ func createTestCRDs(clusterName, namespace string) error {
 	// Create ActionGroup
 	actionGroup := &unstructured.Unstructured{}
 	actionGroup.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.org",
+		Group:   "opensearch.dremio.io",
 		Version: "v1",
 		Kind:    "OpensearchActionGroup",
 	})
@@ -399,7 +399,7 @@ func createTestCRDs(clusterName, namespace string) error {
 	// Create Role
 	role := &unstructured.Unstructured{}
 	role.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.org",
+		Group:   "opensearch.dremio.io",
 		Version: "v1",
 		Kind:    "OpensearchRole",
 	})
@@ -444,7 +444,7 @@ func createTestCRDs(clusterName, namespace string) error {
 	// Create User
 	user := &unstructured.Unstructured{}
 	user.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.org",
+		Group:   "opensearch.dremio.io",
 		Version: "v1",
 		Kind:    "OpensearchUser",
 	})
@@ -477,7 +477,7 @@ func verifyTestCRDs(clusterName, namespace string) error {
 	// Verify ActionGroup
 	actionGroup := &unstructured.Unstructured{}
 	actionGroup.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.org",
+		Group:   "opensearch.dremio.io",
 		Version: "v1",
 		Kind:    "OpensearchActionGroup",
 	})
@@ -489,7 +489,7 @@ func verifyTestCRDs(clusterName, namespace string) error {
 	// Verify Role
 	role := &unstructured.Unstructured{}
 	role.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.org",
+		Group:   "opensearch.dremio.io",
 		Version: "v1",
 		Kind:    "OpensearchRole",
 	})
@@ -501,7 +501,7 @@ func verifyTestCRDs(clusterName, namespace string) error {
 	// Verify User
 	user := &unstructured.Unstructured{}
 	user.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.org",
+		Group:   "opensearch.dremio.io",
 		Version: "v1",
 		Kind:    "OpensearchUser",
 	})
@@ -518,7 +518,7 @@ func cleanupTestCRDs(clusterName, namespace string) {
 	// Delete ActionGroup
 	actionGroup := &unstructured.Unstructured{}
 	actionGroup.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.org",
+		Group:   "opensearch.dremio.io",
 		Version: "v1",
 		Kind:    "OpensearchActionGroup",
 	})
@@ -529,7 +529,7 @@ func cleanupTestCRDs(clusterName, namespace string) {
 	// Delete Role
 	role := &unstructured.Unstructured{}
 	role.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.org",
+		Group:   "opensearch.dremio.io",
 		Version: "v1",
 		Kind:    "OpensearchRole",
 	})
@@ -540,7 +540,7 @@ func cleanupTestCRDs(clusterName, namespace string) {
 	// Delete User
 	user := &unstructured.Unstructured{}
 	user.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.org",
+		Group:   "opensearch.dremio.io",
 		Version: "v1",
 		Kind:    "OpensearchUser",
 	})

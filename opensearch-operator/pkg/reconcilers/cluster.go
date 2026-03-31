@@ -334,7 +334,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
 	}
 
-	// NOTE: This is needed for migration from opster.io/v1 to opensearch.org/v1. Update labels on orphaned pods to match the new StatefulSet's selector
+	// NOTE: Update labels on orphaned pods to match the StatefulSet's selector
 	// to ensure they can be adopted by the new StatefulSet and counted correctly
 	if err := r.updateOrphanedPodLabels(&existing, sts, &nodePool); err != nil {
 		r.logger.Error(err, "Failed to update orphaned pod labels", "statefulset", sts.Name)

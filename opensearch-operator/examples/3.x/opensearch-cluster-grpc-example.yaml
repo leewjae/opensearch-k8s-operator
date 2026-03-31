@@ -3,7 +3,7 @@
 # gRPC APIs are available starting from OpenSearch 3.0, with Bulk and k-NN search
 # generally available from version 3.2
 
-apiVersion: opensearch.org/v1
+apiVersion: opensearch.dremio.io/v1
 kind: OpenSearchCluster
 metadata:
   name: my-cluster-grpc

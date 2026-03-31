@@ -1,6 +1,6 @@
 {{- $labels := include "opensearch-cluster.labels" . }}
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
-{{- $apiGroup := $.Values.apiGroup | default "opensearch.org" }}
+{{- $apiGroup := $.Values.apiGroup | default "opensearch.dremio.io" }}
 {{- range .Values.tenants }}
 ---
 apiVersion: {{ $apiGroup }}/v1

@@ -5,7 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "opensearch.org/v1",
+          "apiVersion": "opensearch.dremio.io/v1",
           "kind": "OpenSearchCluster",
           "metadata": {
             "name": "my-cluster",
@@ -37,7 +37,7 @@ metadata:
           }
         },
         {
-          "apiVersion": "opensearch.org/v1",
+          "apiVersion": "opensearch.dremio.io/v1",
           "kind": "OpensearchUser",
           "metadata": {
             "name": "sample-user",
@@ -54,7 +54,7 @@ metadata:
           }
         },
         {
-          "apiVersion": "opensearch.org/v1",
+          "apiVersion": "opensearch.dremio.io/v1",
           "kind": "OpensearchRole",
           "metadata": {
             "name": "sample-role",
@@ -74,7 +74,7 @@ metadata:
           }
         },
         {
-          "apiVersion": "opensearch.org/v1",
+          "apiVersion": "opensearch.dremio.io/v1",
           "kind": "OpensearchUserRoleBinding",
           "metadata": {
             "name": "sample-user-role-binding",
@@ -89,7 +89,7 @@ metadata:
           }
         },
         {
-          "apiVersion": "opensearch.org/v1",
+          "apiVersion": "opensearch.dremio.io/v1",
           "kind": "OpensearchTenant",
           "metadata": {
             "name": "sample-tenant",
@@ -103,7 +103,7 @@ metadata:
           }
         },
         {
-          "apiVersion": "opensearch.org/v1",
+          "apiVersion": "opensearch.dremio.io/v1",
           "kind": "OpensearchActionGroup",
           "metadata": {
             "name": "sample-action-group",
@@ -117,7 +117,7 @@ metadata:
           }
         },
         {
-          "apiVersion": "opensearch.org/v1",
+          "apiVersion": "opensearch.dremio.io/v1",
           "kind": "OpenSearchISMPolicy",
           "metadata": {
             "name": "sample-ism-policy",
@@ -156,7 +156,7 @@ metadata:
           }
         },
         {
-          "apiVersion": "opensearch.org/v1",
+          "apiVersion": "opensearch.dremio.io/v1",
           "kind": "OpensearchIndexTemplate",
           "metadata": {
             "name": "sample-index-template",
@@ -178,7 +178,7 @@ metadata:
           }
         },
         {
-          "apiVersion": "opensearch.org/v1",
+          "apiVersion": "opensearch.dremio.io/v1",
           "kind": "OpensearchComponentTemplate",
           "metadata": {
             "name": "sample-component-template",
@@ -197,7 +197,7 @@ metadata:
           }
         },
         {
-          "apiVersion": "opensearch.org/v1",
+          "apiVersion": "opensearch.dremio.io/v1",
           "kind": "OpensearchSnapshotPolicy",
           "metadata": {
             "name": "sample-snapshot-policy",
@@ -245,7 +245,7 @@ spec:
       - description: OpenSearchCluster is the Schema for the opensearchclusters API
         displayName: OpenSearch Cluster
         kind: OpenSearchCluster
-        name: opensearchclusters.opensearch.org
+        name: opensearchclusters.opensearch.dremio.io
         version: v1
         resources:
           - kind: StatefulSet
@@ -286,47 +286,47 @@ spec:
       - description: OpensearchUser is the Schema for the opensearchusers API
         displayName: OpenSearch User
         kind: OpensearchUser
-        name: opensearchusers.opensearch.org
+        name: opensearchusers.opensearch.dremio.io
         version: v1
       - description: OpensearchRole is the Schema for the opensearchroles API
         displayName: OpenSearch Role
         kind: OpensearchRole
-        name: opensearchroles.opensearch.org
+        name: opensearchroles.opensearch.dremio.io
         version: v1
       - description: OpensearchUserRoleBinding binds users to roles
         displayName: OpenSearch User Role Binding
         kind: OpensearchUserRoleBinding
-        name: opensearchuserrolebindings.opensearch.org
+        name: opensearchuserrolebindings.opensearch.dremio.io
         version: v1
       - description: OpensearchTenant is the Schema for the opensearchtenants API
         displayName: OpenSearch Tenant
         kind: OpensearchTenant
-        name: opensearchtenants.opensearch.org
+        name: opensearchtenants.opensearch.dremio.io
         version: v1
       - description: OpensearchActionGroup is the Schema for the opensearchactiongroups API
         displayName: OpenSearch Action Group
         kind: OpensearchActionGroup
-        name: opensearchactiongroups.opensearch.org
+        name: opensearchactiongroups.opensearch.dremio.io
         version: v1
       - description: OpenSearchISMPolicy is the Schema for the opensearchismpolicies API
         displayName: OpenSearch ISM Policy
         kind: OpenSearchISMPolicy
-        name: opensearchismpolicies.opensearch.org
+        name: opensearchismpolicies.opensearch.dremio.io
         version: v1
       - description: OpensearchIndexTemplate is the Schema for index templates
         displayName: OpenSearch Index Template
         kind: OpensearchIndexTemplate
-        name: opensearchindextemplates.opensearch.org
+        name: opensearchindextemplates.opensearch.dremio.io
         version: v1
       - description: OpensearchComponentTemplate is the Schema for component templates
         displayName: OpenSearch Component Template
         kind: OpensearchComponentTemplate
-        name: opensearchcomponenttemplates.opensearch.org
+        name: opensearchcomponenttemplates.opensearch.dremio.io
         version: v1
       - description: OpensearchSnapshotPolicy is the Schema for snapshot policies
         displayName: OpenSearch Snapshot Policy
         kind: OpensearchSnapshotPolicy
-        name: opensearchsnapshotpolicies.opensearch.org
+        name: opensearchsnapshotpolicies.opensearch.dremio.io
         version: v1
   description: |
     ## OpenSearch Kubernetes Operator
@@ -362,7 +362,7 @@ spec:
 
     * GitHub: https://github.com/opensearch-project/opensearch-k8s-operator
     * Documentation: https://opensearch.org/docs/latest/tools/k8s-operator/
-    * Forum: https://forum.opensearch.org/
+    * Forum: https://forum.opensearch.dremio.io/
   displayName: OpenSearch Operator
   icon:
     - base64data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMwMDViOWYiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMDNhNmMiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIzMCIgZmlsbD0idXJsKCNhKSIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0zMiAxNmMtOC44MzYgMC0xNiA3LjE2NC0xNiAxNnM3LjE2NCAxNiAxNiAxNiAxNi03LjE2NCAxNi0xNi03LjE2NC0xNi0xNi0xNnptMCAyOGMtNi42MjcgMC0xMi01LjM3My0xMi0xMnM1LjM3My0xMiAxMi0xMiAxMiA1LjM3MyAxMiAxMi01LjM3MyAxMi0xMiAxMnoiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSI2IiBmaWxsPSIjZmZmIi8+PC9zdmc+
@@ -434,7 +434,7 @@ spec:
                 - update
                 - watch
             - apiGroups:
-                - opensearch.org
+                - opensearch.dremio.io
               resources:
                 - opensearchactiongroups
                 - opensearchclusters
@@ -455,7 +455,7 @@ spec:
                 - update
                 - watch
             - apiGroups:
-                - opensearch.org
+                - opensearch.dremio.io
               resources:
                 - opensearchactiongroups/finalizers
                 - opensearchclusters/finalizers
@@ -470,7 +470,7 @@ spec:
               verbs:
                 - update
             - apiGroups:
-                - opensearch.org
+                - opensearch.dremio.io
               resources:
                 - opensearchactiongroups/status
                 - opensearchclusters/status
