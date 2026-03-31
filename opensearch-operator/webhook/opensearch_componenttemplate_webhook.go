@@ -20,8 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -85,24 +84,13 @@ func (v *OpenSearchComponentTemplateValidator) ValidateDelete(ctx context.Contex
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
 func (v *OpenSearchComponentTemplateValidator) validateClusterReference(ctx context.Context, componentTemplate *opensearchv1.OpensearchComponentTemplate) error {
-	// Try new API group first
 	cluster := &opensearchv1.OpenSearchCluster{}
-	err := v.Client.Get(ctx, types.NamespacedName{
+	if err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      componentTemplate.Spec.OpensearchRef.Name,
 		Namespace: componentTemplate.Namespace,
-	}, cluster)
-
-	if err != nil {
-		// Fall back to old API group for backward compatibility
-		oldCluster := &opsterv1.OpenSearchCluster{}
-		if err := v.Client.Get(ctx, types.NamespacedName{
-			Name:      componentTemplate.Spec.OpensearchRef.Name,
-			Namespace: componentTemplate.Namespace,
-		}, oldCluster); err != nil {
-			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", componentTemplate.Spec.OpensearchRef.Name, err)
-		}
+	}, cluster); err != nil {
+		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", componentTemplate.Spec.OpensearchRef.Name, err)
 	}
-
 	return nil
 }
 

@@ -20,8 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -99,22 +98,12 @@ func (v *OpenSearchISMPolicyValidator) ValidateDelete(ctx context.Context, obj r
 }
 
 func (v *OpenSearchISMPolicyValidator) validateClusterReference(ctx context.Context, policy *opensearchv1.OpenSearchISMPolicy) error {
-	// Try new API group first
 	cluster := &opensearchv1.OpenSearchCluster{}
-	err := v.Client.Get(ctx, types.NamespacedName{
+	if err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      policy.Spec.OpensearchRef.Name,
 		Namespace: policy.Namespace,
-	}, cluster)
-
-	if err != nil {
-		// Fall back to old API group for backward compatibility
-		oldCluster := &opsterv1.OpenSearchCluster{}
-		if err := v.Client.Get(ctx, types.NamespacedName{
-			Name:      policy.Spec.OpensearchRef.Name,
-			Namespace: policy.Namespace,
-		}, oldCluster); err != nil {
-			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", policy.Spec.OpensearchRef.Name, err)
-		}
+	}, cluster); err != nil {
+		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", policy.Spec.OpensearchRef.Name, err)
 	}
 	return nil
 }

@@ -11,8 +11,7 @@ import (
 
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
@@ -26,48 +25,25 @@ type TestDataManager struct {
 	k8sClient   client.Client
 	cluster     *opensearchv1.OpenSearchCluster
 	namespace   string
-	useOldAPI   bool // true if using old API group (opensearch.opster.io/v1)
 }
 
 // NewTestDataManager creates a new test data manager
-// useOldAPI: true to use old API group (opensearch.opster.io/v1), false for new API group (opensearch.org/v1)
-func NewTestDataManager(k8sClient client.Client, clusterName, namespace string, useOldAPI bool) (*TestDataManager, error) {
+func NewTestDataManager(k8sClient client.Client, clusterName, namespace string) (*TestDataManager, error) {
 	manager := &TestDataManager{
 		k8sClient: k8sClient,
 		namespace: namespace,
-		useOldAPI: useOldAPI,
 	}
 
-	var cluster *opensearchv1.OpenSearchCluster
-	if useOldAPI {
-		// Get old API group cluster and convert to new format
-		oldCluster := &opsterv1.OpenSearchCluster{}
-		err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: namespace}, oldCluster)
-		if err != nil {
-			return nil, err
-		}
-		// Convert old cluster to new format using JSON marshaling
-		oldBytes, err := json.Marshal(oldCluster)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal old cluster: %w", err)
-		}
-		cluster = &opensearchv1.OpenSearchCluster{}
-		if err := json.Unmarshal(oldBytes, cluster); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal to new cluster format: %w", err)
-		}
-	} else {
-		// Get new API group cluster
-		cluster = &opensearchv1.OpenSearchCluster{}
-		err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: namespace}, cluster)
-		if err != nil {
-			return nil, err
-		}
+	cluster := &opensearchv1.OpenSearchCluster{}
+	err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: namespace}, cluster)
+	if err != nil {
+		return nil, err
 	}
 	manager.cluster = cluster
 
 	// Get cluster URL and credentials
 	// Use accessible URL for k3d (ClusterIP instead of DNS)
-	clusterUrl, err := getAccessibleClusterURL(k8sClient, cluster, useOldAPI)
+	clusterUrl, err := getAccessibleClusterURL(k8sClient, cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -106,39 +82,17 @@ func NewTestDataManager(k8sClient client.Client, clusterName, namespace string, 
 }
 
 // Reconnect reconnects to the cluster (useful after operations that might change cluster state)
-// useOldAPI: true to use old API group (opensearch.opster.io/v1), false for new API group (opensearch.org/v1)
-func (m *TestDataManager) Reconnect(useOldAPI bool) error {
-	m.useOldAPI = useOldAPI
-	var cluster *opensearchv1.OpenSearchCluster
-	if useOldAPI {
-		// Get old API group cluster and convert to new format
-		oldCluster := &opsterv1.OpenSearchCluster{}
-		err := m.k8sClient.Get(context.Background(), client.ObjectKey{Name: m.cluster.Name, Namespace: m.namespace}, oldCluster)
-		if err != nil {
-			return err
-		}
-		// Convert old cluster to new format using JSON marshaling
-		oldBytes, err := json.Marshal(oldCluster)
-		if err != nil {
-			return fmt.Errorf("failed to marshal old cluster: %w", err)
-		}
-		cluster = &opensearchv1.OpenSearchCluster{}
-		if err := json.Unmarshal(oldBytes, cluster); err != nil {
-			return fmt.Errorf("failed to unmarshal to new cluster format: %w", err)
-		}
-	} else {
-		// Get new API group cluster
-		cluster = &opensearchv1.OpenSearchCluster{}
-		err := m.k8sClient.Get(context.Background(), client.ObjectKey{Name: m.cluster.Name, Namespace: m.namespace}, cluster)
-		if err != nil {
-			return err
-		}
+func (m *TestDataManager) Reconnect() error {
+	cluster := &opensearchv1.OpenSearchCluster{}
+	err := m.k8sClient.Get(context.Background(), client.ObjectKey{Name: m.cluster.Name, Namespace: m.namespace}, cluster)
+	if err != nil {
+		return err
 	}
 	m.cluster = cluster
 
 	// Get cluster URL and credentials
 	// Use accessible URL for k3d (ClusterIP instead of DNS)
-	clusterUrl, err := getAccessibleClusterURL(m.k8sClient, cluster, useOldAPI)
+	clusterUrl, err := getAccessibleClusterURL(m.k8sClient, cluster)
 	if err != nil {
 		return err
 	}

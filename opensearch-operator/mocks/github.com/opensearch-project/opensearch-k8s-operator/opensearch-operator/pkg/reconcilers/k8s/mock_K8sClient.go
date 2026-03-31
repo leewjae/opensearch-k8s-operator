@@ -12,7 +12,7 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 
-	opensearch_orgv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	opensearch_orgv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 
 	reconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
 

@@ -37,12 +37,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 )
 
 // OpenSearchClusterReconciler reconciles a OpenSearchCluster object
-// Now reconciles opensearch.org/v1 API group (new API) instead of opensearch.opster.io/v1 (old API)
 type OpenSearchClusterReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
@@ -78,23 +76,14 @@ type OpenSearchClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx).WithValues("cluster", req.NamespacedName, "apiGroup", "opensearch.org/v1")
-	r.Info("Reconciling OpenSearchCluster (opensearch.org/v1)")
+	r.Logger = log.FromContext(ctx).WithValues("cluster", req.NamespacedName)
+	r.Info("Reconciling OpenSearchCluster")
 	myFinalizerName := "Opensearch"
 
-	// Try to get new API group resource first
 	r.Instance = &opensearchv1.OpenSearchCluster{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// If new API group resource not found, check if old one exists (for backward compatibility during migration)
-			oldInstance := &opsterv1.OpenSearchCluster{}
-			if err := r.Get(ctx, req.NamespacedName, oldInstance); err == nil {
-				// Old instance exists but new one doesn't - migration controller should handle this
-				// Just requeue to let migration controller create the new one
-				r.Info("Old API group resource exists, waiting for migration", "name", req.Name)
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-			}
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err

@@ -21,8 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -44,7 +43,6 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 		ctx = context.Background()
 		scheme = runtime.NewScheme()
 		_ = opensearchv1.AddToScheme(scheme)
-		_ = opsterv1.AddToScheme(scheme)
 		_ = corev1.AddToScheme(scheme)
 
 		cluster = &opensearchv1.OpenSearchCluster{
@@ -185,41 +183,6 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 			Expect(warnings).To(BeEmpty())
 		})
 
-		It("should allow policy with old API group cluster reference", func() {
-			oldCluster := &opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "old-cluster",
-					Namespace: "default",
-				},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
-						Version: "2.19.4",
-					},
-				},
-			}
-			clientWithOldCluster := fake.NewClientBuilder().WithScheme(scheme).WithObjects(oldCluster).Build()
-			validator.Client = clientWithOldCluster
-
-			policy := &opensearchv1.OpenSearchISMPolicy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-policy",
-					Namespace: "default",
-				},
-				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
-						Name: "old-cluster",
-					},
-					DefaultState: "hot",
-					States: []opensearchv1.State{
-						{Name: "hot"},
-					},
-				},
-			}
-
-			warnings, err := validator.ValidateCreate(ctx, policy)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(warnings).To(BeEmpty())
-		})
 	})
 
 	Describe("ValidateUpdate", func() {

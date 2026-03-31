@@ -13,7 +13,7 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -233,7 +233,7 @@ func WaitForClusterReady(k8sClient client.Client, clusterName, namespace string,
 
 			// Check if cluster is ready (you might need to adjust this based on your cluster status)
 			// For now, we'll just check if we can connect
-			manager, err := NewTestDataManager(k8sClient, clusterName, namespace, false)
+			manager, err := NewTestDataManager(k8sClient, clusterName, namespace)
 			if err == nil {
 				health, err := manager.osClient.GetHealth()
 				if err == nil && (health.Status == "green" || health.Status == "yellow") {
@@ -262,8 +262,7 @@ var (
 
 // getAccessibleClusterURL returns a cluster URL that can be accessed from outside the k3d cluster.
 // For k3d clusters, we expose the OpenSearch service via a NodePort and access it through localhost.
-// useOldAPI: true to use old API group label (opster.io/opensearch-cluster), false for new API group label (opensearch.org/opensearch-cluster)
-func getAccessibleClusterURL(k8sClient client.Client, cluster *opensearchv1.OpenSearchCluster, useOldAPI bool) (string, error) {
+func getAccessibleClusterURL(k8sClient client.Client, cluster *opensearchv1.OpenSearchCluster) (string, error) {
 	httpPort := cluster.Spec.General.HttpPort
 	if httpPort == 0 {
 		httpPort = 9200
@@ -275,33 +274,13 @@ func getAccessibleClusterURL(k8sClient client.Client, cluster *opensearchv1.Open
 
 	const nodePort int32 = 30000 // must match k3d port mapping (30000-30005)
 
-	// Use appropriate label based on API group
-	clusterLabel := helpers.ClusterLabel // "opensearch.org/opensearch-cluster"
-	if useOldAPI {
-		clusterLabel = helpers.OldClusterLabel
-	}
 	selector := map[string]string{
-		clusterLabel: cluster.Name,
+		helpers.ClusterLabel: cluster.Name,
 	}
 
-	// Expose the OpenSearch HTTP service via NodePort
-	// ExposePodViaNodePort will update the selector if the service already exists with a different selector
 	nodePortErr = ExposePodViaNodePort(selector, cluster.Namespace, nodePort, httpPort)
 	if nodePortErr == nil {
 		nodePortURL = fmt.Sprintf("%s://127.0.0.1:%d", protocol, nodePort)
-	} else {
-		// If that failed, try the other label (in case pods have both labels during migration)
-		otherLabel := helpers.ClusterLabel
-		if !useOldAPI {
-			otherLabel = helpers.OldClusterLabel
-		}
-		otherSelector := map[string]string{
-			otherLabel: cluster.Name,
-		}
-		if err := ExposePodViaNodePort(otherSelector, cluster.Namespace, nodePort, httpPort); err == nil {
-			nodePortURL = fmt.Sprintf("%s://127.0.0.1:%d", protocol, nodePort)
-			nodePortErr = nil
-		}
 	}
 
 	if nodePortErr != nil {
@@ -377,7 +356,7 @@ func setupDataIntegrityTest(clusterName, namespace string) (*TestDataManager, *C
 	GinkgoWriter.Printf("  + Data node pool ready: 3/3 replicas\n")
 
 	By("Initializing test data manager")
-	dataManager, err := NewTestDataManager(k8sClient, clusterName, namespace, false)
+	dataManager, err := NewTestDataManager(k8sClient, clusterName, namespace)
 	Expect(err).NotTo(HaveOccurred())
 	GinkgoWriter.Printf("  + Test data manager initialized\n")
 

@@ -21,8 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -44,7 +43,6 @@ var _ = Describe("OpenSearchUserValidator", func() {
 		ctx = context.Background()
 		scheme = runtime.NewScheme()
 		_ = opensearchv1.AddToScheme(scheme)
-		_ = opsterv1.AddToScheme(scheme)
 		_ = corev1.AddToScheme(scheme)
 
 		cluster = &opensearchv1.OpenSearchCluster{
@@ -113,44 +111,6 @@ var _ = Describe("OpenSearchUserValidator", func() {
 			warnings, err := validator.ValidateCreate(ctx, user)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("referenced OpenSearch cluster 'non-existent-cluster' not found"))
-			Expect(warnings).To(BeEmpty())
-		})
-
-		It("should allow user with old API group cluster reference", func() {
-			oldCluster := &opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "old-cluster",
-					Namespace: "default",
-				},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
-						Version: "2.19.4",
-					},
-				},
-			}
-			clientWithOldCluster := fake.NewClientBuilder().WithScheme(scheme).WithObjects(oldCluster).Build()
-			validator.Client = clientWithOldCluster
-
-			user := &opensearchv1.OpensearchUser{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-user",
-					Namespace: "default",
-				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
-						Name: "old-cluster",
-					},
-					PasswordFrom: corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: "user-password",
-						},
-						Key: "password",
-					},
-				},
-			}
-
-			warnings, err := validator.ValidateCreate(ctx, user)
-			Expect(err).NotTo(HaveOccurred())
 			Expect(warnings).To(BeEmpty())
 		})
 

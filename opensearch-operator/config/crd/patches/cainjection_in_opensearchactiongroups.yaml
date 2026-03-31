@@ -4,5 +4,5 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: $(CERTIFICATE_NAMESPACE)/$(CERTIFICATE_NAME)
-  name: opensearchactiongroups.opensearch.opster.io
+  name: opensearchactiongroups.opensearch.dremio.io
 

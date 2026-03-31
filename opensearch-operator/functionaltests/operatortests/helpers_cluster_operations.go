@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,7 +29,7 @@ func NewClusterOperations(k8sClient client.Client, namespace string) *ClusterOpe
 // UpgradeCluster upgrades the cluster to the specified version
 func (co *ClusterOperations) UpgradeCluster(clusterName string, opensearchVersion, dashboardsVersion string) error {
 	cluster := unstructured.Unstructured{}
-	cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.org", Version: "v1", Kind: "OpenSearchCluster"})
+	cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.dremio.io", Version: "v1", Kind: "OpenSearchCluster"})
 
 	err := co.k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: co.namespace}, &cluster)
 	if err != nil {

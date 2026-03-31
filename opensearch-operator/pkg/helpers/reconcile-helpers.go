@@ -8,7 +8,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/hashicorp/go-version"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 )
 
 func ResolveInitHelperImage(cr *opensearchv1.OpenSearchCluster) (result opensearchv1.ImageSpec) {

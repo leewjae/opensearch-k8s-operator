@@ -11,7 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -113,7 +113,7 @@ var _ = Describe("OperatorUpgrade", func() {
 
 		By("Step 3: Initializing test data manager and verifying cluster")
 		// Use new API group (opensearch.org/v1)
-		dataManager, err = NewTestDataManager(k8sClient, clusterName, namespace, false)
+		dataManager, err = NewTestDataManager(k8sClient, clusterName, namespace)
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Test data manager initialized\n")
 
@@ -150,7 +150,7 @@ var _ = Describe("OperatorUpgrade", func() {
 
 		By("Step 6: Verifying cluster is still functional after upgrade")
 		// Reconnect to cluster using new API group
-		err = dataManager.Reconnect(false)
+		err = dataManager.Reconnect()
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Reconnected to cluster\n")
 
