@@ -1,130 +1,99 @@
 package reconcilers
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	k8s "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
+	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-var _ = Describe("Bootstrap Pod Reconciliation Fix", func() {
-	Context("Bootstrap Pod Recreation Approach", func() {
-		It("should detect when any bootstrap pod spec field has changed", func() {
+func newClusterReconciler(client *k8s.MockK8sClient, instance *opensearchv1.OpenSearchCluster) *ClusterReconciler {
+	reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, instance, instance.Spec.NodePools)
+	return &ClusterReconciler{
+		client:            client,
+		ctx:               context.Background(),
+		recorder:          &record.FakeRecorder{},
+		reconcilerContext: &reconcilerContext,
+		instance:          instance,
+	}
+}
+
+var _ = Describe("reconcileBootstrapPod", func() {
+
+	Context("When reconciling the bootstrap pod", func() {
+		It("Should create the pod using StateCreated when it does not exist", func() {
 			instance := &opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "recreation-test",
+					Name:      "test-cluster",
 					Namespace: "test-namespace",
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
-						HttpPort:       9200,
-						ServiceName:    "recreation-test",
-						Version:        "2.8.0",
-						ServiceAccount: "default-sa",
-					},
-					Bootstrap: opensearchv1.BootstrapConfig{
-						Tolerations: []corev1.Toleration{
-							{
-								Key:      "purpose",
-								Operator: "Equal",
-								Value:    "logging",
-								Effect:   "NoSchedule",
-							},
-						},
+						HttpPort:    9200,
+						ServiceName: "test-cluster",
+						Version:     "2.11.1",
 					},
 				},
-				Status: opensearchv1.ClusterStatus{
-					Initialized: false,
+			}
+			desiredPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster-bootstrap-0",
+					Namespace: "test-namespace",
 				},
 			}
 
-			volumes := []corev1.Volume{}
-			volumeMounts := []corev1.VolumeMount{}
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.On("ReconcileResource", desiredPod, reconciler.StateCreated).
+				Return(&ctrl.Result{}, nil)
 
-			originalPod := builders.NewBootstrapPod(instance, volumes, volumeMounts)
+			r := newClusterReconciler(mockClient, instance)
+			result, err := r.reconcileBootstrapPod(desiredPod)
 
-			By("Testing PodSpecChanged utility function")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).ToNot(BeNil())
+			mockClient.AssertExpectations(GinkgoT())
+		})
 
-			// Test 1: Same spec should not trigger recreation
-			Expect(util.PodSpecChanged(originalPod, originalPod)).To(BeFalse())
-
-			// Test 2: Different ServiceAccountName should trigger recreation
-			modifiedPod := originalPod.DeepCopy()
-			modifiedPod.Spec.ServiceAccountName = "new-sa"
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 3: Different Tolerations should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.Tolerations = []corev1.Toleration{
-				{
-					Key:      "new-purpose",
-					Operator: "Equal",
-					Value:    "monitoring",
-					Effect:   "NoSchedule",
+		It("Should never attempt to update an existing pod with StatePresent", func() {
+			instance := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "test-namespace",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						HttpPort:    9200,
+						ServiceName: "test-cluster",
+						Version:     "2.11.1",
+					},
 				},
 			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 4: Different NodeSelector should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.NodeSelector = map[string]string{
-				"node-type": "compute",
-			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 5: Different environment variables should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			if len(modifiedPod.Spec.Containers) > 0 {
-				modifiedPod.Spec.Containers[0].Env = append(modifiedPod.Spec.Containers[0].Env, corev1.EnvVar{
-					Name:  "NEW_VAR",
-					Value: "new_value",
-				})
-			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 6: Different container image should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			if len(modifiedPod.Spec.Containers) > 0 {
-				modifiedPod.Spec.Containers[0].Image = "opensearch:2.9.0"
-			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 7: Different volumes should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.Volumes = append(modifiedPod.Spec.Volumes, corev1.Volume{
-				Name: "extra-volume",
-				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
+			desiredPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster-bootstrap-0",
+					Namespace: "test-namespace",
 				},
-			})
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
+			}
 
-			// Test 8: NodeName changes set by the scheduler should be ignored
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.NodeName = "worker-node-1"
-			Expect(util.PodSpecChanged(modifiedPod, originalPod)).To(BeFalse())
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			// StateCreated is idempotent: if pod exists it does nothing, so no StatePresent call
+			mockClient.On("ReconcileResource", desiredPod, reconciler.StateCreated).
+				Return(&ctrl.Result{}, nil)
 
-			// Test 9: Default node lifecycle tolerations injected by Kubelet should be ignored
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.Tolerations = append(modifiedPod.Spec.Tolerations,
-				corev1.Toleration{
-					Key:               "node.kubernetes.io/not-ready",
-					Operator:          corev1.TolerationOpExists,
-					Effect:            corev1.TaintEffectNoExecute,
-					TolerationSeconds: ptr.To[int64](300),
-				},
-				corev1.Toleration{
-					Key:               "node.kubernetes.io/unreachable",
-					Operator:          corev1.TolerationOpExists,
-					Effect:            corev1.TaintEffectNoExecute,
-					TolerationSeconds: ptr.To[int64](300),
-				},
-			)
-			Expect(util.PodSpecChanged(modifiedPod, originalPod)).To(BeFalse())
+			r := newClusterReconciler(mockClient, instance)
+			_, err := r.reconcileBootstrapPod(desiredPod)
+
+			Expect(err).ToNot(HaveOccurred())
+			mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", desiredPod, reconciler.StatePresent)
+			mockClient.AssertExpectations(GinkgoT())
 		})
 	})
 })
