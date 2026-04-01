@@ -1,0 +1,106 @@
+apiVersion: opensearch.dremio.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: test-cluster
+  namespace: default
+spec:
+  bootstrap:
+    affinity: {}
+    resources: {}
+  confMgmt:
+    smartScaler: true
+  dashboards:
+    affinity: {}
+    enable: true
+    opensearchCredentialsSecret:
+      name: ""
+    podSecurityContext: {}
+    replicas: 1
+    resources: {}
+    securityContext: {}
+    service:
+      type: ClusterIP
+    tls:
+      caSecret:
+        name: ""
+      duration: 8760h0m0s
+      generate: true
+      secret:
+        name: ""
+    version: 2.19.4
+  general:
+    additionalConfig:
+      # Lower thresholds to avoid tests failing on
+      # resource-constrained environments like Github Action runners
+      cluster.routing.allocation.disk.watermark.low: 500m
+      cluster.routing.allocation.disk.watermark.high: 300m
+      cluster.routing.allocation.disk.watermark.flood_stage: 100m
+    drainDataNodes: true
+    httpPort: 9200
+    monitoring:
+      scrapeInterval: 30s
+      tlsConfig: {}
+    podSecurityContext: {}
+    securityContext: {}
+    serviceName: opensearch-cluster
+    setVMMaxMapCount: true
+    vendor: Opensearch
+    version: 2.19.4
+  initHelper:
+    image: docker.io/busybox:1.36
+    imagePullPolicy: IfNotPresent
+    resources: {}
+    version: "1.36"
+  nodePools:
+  - component: masters
+    diskSize: 1Gi
+    replicas: 3
+    resources:
+      limits:
+        cpu: 500m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 2Gi
+    roles:
+    - master
+  - component: data
+    diskSize: 1Gi
+    replicas: 3
+    resources:
+      limits:
+        cpu: 500m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 2Gi
+    roles:
+    - data
+  security:
+    config:
+      adminCredentialsSecret:
+        name: ""
+      adminSecret:
+        name: ""
+      securityConfigSecret:
+        name: ""
+      updateJob:
+        resources: {}
+    tls:
+      http:
+        caSecret:
+          name: ""
+        duration: 8760h0m0s
+        generate: true
+        rotateDaysBeforeExpiry: -1
+        secret:
+          name: ""
+      transport:
+        caSecret:
+          name: ""
+        duration: 8760h0m0s
+        generate: true
+        perNode: true
+        rotateDaysBeforeExpiry: -1
+        secret:
+          name: ""

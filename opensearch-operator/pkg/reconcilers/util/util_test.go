@@ -3,22 +3,22 @@ package util
 import (
 	"context"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	v1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("Additional volumes", func() {
 	namespace := "Additional volume test"
-	var volumeConfigs []opsterv1.AdditionalVolume
+	var volumeConfigs []opensearchv1.AdditionalVolume
 	var mockClient *k8s.MockK8sClient
 
 	BeforeEach(func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		mockClient.EXPECT().Context().Return(context.Background())
-		volumeConfigs = []opsterv1.AdditionalVolume{
+		volumeConfigs = []opensearchv1.AdditionalVolume{
 			{
 				Name: "myVolume",
 				Path: "myPath/a/b",
@@ -233,21 +233,53 @@ var _ = Describe("Additional volumes", func() {
 
 		})
 	})
+
+	When("HostPath volume is added", func() {
+		It("Should have HostPathVolumeSource fields and mount read-write", func() {
+			hostPathType := v1.HostPathDirectoryOrCreate
+			volumeConfigs[0].HostPath = &v1.HostPathVolumeSource{
+				Path: "/host/path",
+				Type: &hostPathType,
+			}
+
+			volume, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].HostPath.Path).To(Equal("/host/path"))
+			Expect(*volume[0].HostPath.Type).To(Equal(v1.HostPathDirectoryOrCreate))
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].ReadOnly).To(BeFalse())
+			Expect(volumeMount[0].SubPath).To(BeEmpty())
+		})
+	})
+
+	When("HostPath volume is added with subPath", func() {
+		It("Should not set subPath", func() {
+			hostPathType := v1.HostPathDirectory
+			volumeConfigs[0].HostPath = &v1.HostPathVolumeSource{
+				Path: "/host/path",
+				Type: &hostPathType,
+			}
+			volumeConfigs[0].SubPath = "subpath"
+
+			_, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].SubPath).To(BeEmpty())
+		})
+	})
 })
 
 var _ = Describe("OpensearchClusterURL", func() {
 	When("HTTP TLS is enabled", func() {
 		It("should return https URL", func() {
 			enabled := true
-			cluster := &opsterv1.OpenSearchCluster{
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+			cluster := &opensearchv1.OpenSearchCluster{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: "test-service",
 						HttpPort:    9200,
 					},
-					Security: &opsterv1.Security{
-						Tls: &opsterv1.TlsConfig{
-							Http: &opsterv1.TlsConfigHttp{
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Http: &opensearchv1.TlsConfigHttp{
 								Enabled: &enabled,
 							},
 						},
@@ -268,15 +300,15 @@ var _ = Describe("OpensearchClusterURL", func() {
 	When("HTTP TLS is disabled", func() {
 		It("should return http URL", func() {
 			enabled := false
-			cluster := &opsterv1.OpenSearchCluster{
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+			cluster := &opensearchv1.OpenSearchCluster{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: "test-service",
 						HttpPort:    9200,
 					},
-					Security: &opsterv1.Security{
-						Tls: &opsterv1.TlsConfig{
-							Http: &opsterv1.TlsConfigHttp{
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Http: &opensearchv1.TlsConfigHttp{
 								Enabled: &enabled,
 							},
 						},

@@ -209,4 +209,3 @@ webhooks:
     - opensearchuserrolebindings
   sideEffects: None
 {{- end }}
-

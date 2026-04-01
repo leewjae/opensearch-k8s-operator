@@ -22,7 +22,12 @@ patches:
 #- path: patches/webhook_in_opensearchusers.yaml
 #- path: patches/webhook_in_opensearchroles.yaml
 #- path: patches/webhook_in_opensearchuserrolebindings.yaml
+#- path: patches/webhook_in_opensearchtenants.yaml
+#- path: patches/webhook_in_opensearchactiongroups.yaml
+#- path: patches/webhook_in_opensearchismpolicies.yaml
 #- path: patches/webhook_in_opensearchsnapshotpolicies.yaml
+#- path: patches/webhook_in_opensearchindextemplates.yaml
+#- path: patches/webhook_in_opensearchcomponenttemplates.yaml
 #+kubebuilder:scaffold:crdkustomizewebhookpatch
 
 # [CERTMANAGER] To enable webhook, uncomment all the sections with [CERTMANAGER] prefix.
@@ -31,7 +36,12 @@ patches:
 - path: patches/cainjection_in_opensearchusers.yaml
 - path: patches/cainjection_in_opensearchroles.yaml
 - path: patches/cainjection_in_opensearchuserrolebindings.yaml
+- path: patches/cainjection_in_opensearchtenants.yaml
+- path: patches/cainjection_in_opensearchactiongroups.yaml
+- path: patches/cainjection_in_opensearchismpolicies.yaml
 - path: patches/cainjection_in_opensearchsnapshotpolicies.yaml
+- path: patches/cainjection_in_opensearchindextemplates.yaml
+- path: patches/cainjection_in_opensearchcomponenttemplates.yaml
 #+kubebuilder:scaffold:crdkustomizecainjectionpatch
 
 # the following config is for teaching kustomize how to do kustomization for CRDs.

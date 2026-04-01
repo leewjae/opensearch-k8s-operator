@@ -8,7 +8,6 @@ rules:
   - ""
   resources:
   - configmaps
-  - namespaces
   - persistentvolumeclaims
   - pods
   - secrets
@@ -34,7 +33,6 @@ rules:
   resources:
   - deployments
   - statefulsets
-  - statefulsets/status
   verbs:
   - create
   - delete
@@ -43,6 +41,14 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - batch
   resources:

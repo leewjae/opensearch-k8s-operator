@@ -6,7 +6,7 @@
 
 ## opensearch.dremio.io/v1
 
-Package v1 contains API Schema definitions for the dremio v1 API group
+Package v1 contains API Schema definitions for the opensearch.dremio.io v1 API group
 
 ### Resource Types
 - [OpenSearchCluster](#opensearchcluster)
@@ -50,7 +50,7 @@ _Appears in:_
 | `rollover` _[Rollover](#rollover)_ | Rolls an alias over to a new index when the managed index meets one of the rollover conditions. |  |  |
 | `rollup` _[Rollup](#rollup)_ | Periodically reduce data granularity by rolling up old data into summarized indexes. |  |  |
 | `shrink` _[Shrink](#shrink)_ | Allows you to reduce the number of primary shards in your indexes |  |  |
-| `snapshot` _[Snapshot](#snapshot)_ | Back up your cluster’s indexes and state |  |  |
+| `snapshot` _[Snapshot](#snapshot)_ | Back up your cluster's indexes and state |  |  |
 | `timeout` _string_ | The timeout period for the action. Accepts time units for minutes, hours, and days. |  |  |
 
 
@@ -78,6 +78,7 @@ _Appears in:_
 | `persistentVolumeClaim` _[PersistentVolumeClaimVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#persistentvolumeclaimvolumesource-v1-core)_ | PersistentVolumeClaim object to use to populate the volume |  |  |
 | `projected` _[ProjectedVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#projectedvolumesource-v1-core)_ | Projected object to use to populate the volume |  |  |
 | `nfs` _[NFSVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#nfsvolumesource-v1-core)_ | NFS object to use to populate the volume |  |  |
+| `hostPath` _[HostPathVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostpathvolumesource-v1-core)_ | HostPath object to use to populate the volume |  |  |
 | `restartPods` _boolean_ | Whether to restart the pods on content change |  |  |
 
 
@@ -131,7 +132,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `exclude` _string_ | Allocate the index to a node with a specified attribute. |  |  |
 | `include` _string_ | Allocate the index to a node with any of the specified attributes. |  |  |
-| `require` _string_ | Don’t allocate the index to a node with any of the specified attributes. |  |  |
+| `require` _string_ | Don't allocate the index to a node with any of the specified attributes. |  |  |
 | `waitFor` _string_ | Wait for the policy to execute before allocating the index to a node with a specified attribute. |  |  |
 
 
@@ -162,6 +163,7 @@ _Appears in:_
 | `hostAliases` _[HostAlias](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostalias-v1-core) array_ |  |  |  |
 | `diskSize` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#quantity-resource-api)_ |  |  |  |
 | `priorityClassName` _string_ |  |  |  |
+| `storageClass` _string_ |  |  |  |
 
 
 #### Close
@@ -255,7 +257,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `autoScaler` _boolean_ |  |  |  |
 | `VerUpdate` _boolean_ |  |  |  |
-| `smartScaler` _boolean_ |  |  |  |
+| `smartScaler` _boolean_ |  | true | Required: \{\} <br /> |
 
 
 #### Cron
@@ -356,6 +358,7 @@ _Appears in:_
 | `podSecurityContext` _[PodSecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podsecuritycontext-v1-core)_ | Set security context for the dashboards pods |  |  |
 | `securityContext` _[SecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core)_ | Set security context for the dashboards pods' container |  |  |
 | `priorityClassName` _string_ |  |  |  |
+| `opensearchDashboardsHome` _string_ | OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set. |  |  |
 
 
 #### DashboardsServiceSpec
@@ -509,6 +512,37 @@ _Appears in:_
 | `securityContext` _[SecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core)_ | Set security context for the cluster pods' container |  |  |
 | `hostAliases` _[HostAlias](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostalias-v1-core) array_ |  |  |  |
 | `operatorClusterURL` _string_ | Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch<br />instead of the default internal Kubernetes service DNS name. |  |  |
+| `grpc` _[GrpcConfig](#grpcconfig)_ | gRPC API configuration for OpenSearch |  |  |
+| `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
+| `opensearchHome` _string_ | OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set. |  |  |
+
+
+#### GrpcConfig
+
+
+
+GrpcConfig defines gRPC API configuration for OpenSearch
+
+
+
+_Appears in:_
+- [GeneralConfig](#generalconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enable` _boolean_ | Enable gRPC transport. When enabled, gRPC APIs will be available. |  |  |
+| `port` _string_ | Port range for gRPC transport (e.g., "9400-9500"). If not specified, defaults to "9400-9500". |  |  |
+| `host` _string array_ | Host addresses the gRPC server will bind to. If not specified, defaults to ["0.0.0.0"]. |  |  |
+| `bindHost` _string array_ | Bind host addresses for the gRPC server. Can be distinct from publish hosts. |  |  |
+| `publishHost` _string array_ | Publish hostnames or IPs for client connections. |  |  |
+| `publishPort` _integer_ | Publish port number that this node uses to publish itself to peers for gRPC transport. |  |  |
+| `nettyWorkerCount` _integer_ | Number of Netty worker threads for the gRPC server. Controls concurrency and parallelism. |  |  |
+| `nettyExecutorCount` _integer_ | Number of threads in the fork-join pool for processing gRPC service calls. |  |  |
+| `maxConcurrentConnectionCalls` _integer_ | Maximum number of simultaneous in-flight requests allowed per client connection. |  |  |
+| `maxConnectionAge` _string_ | Maximum age a connection can reach before being gracefully closed (e.g., "500ms", "2m"). |  |  |
+| `maxConnectionIdle` _string_ | Maximum duration for which a connection can be idle before being closed (e.g., "2m"). |  |  |
+| `keepaliveTimeout` _string_ | Amount of time to wait for keepalive ping acknowledgment before closing the connection (e.g., "1s"). |  |  |
+| `maxMsgSize` _string_ | Maximum inbound message size for gRPC requests (e.g., "10mb", "10485760"). |  |  |
 
 
 #### ISMTemplate
@@ -1484,6 +1518,9 @@ _Appears in:_
 | `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core)_ |  |  |  |
 | `priorityClassName` _string_ |  |  |  |
 | `labels` _object (keys:string, values:string)_ |  |  |  |
+| `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
+| `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 
 
 #### Shrink
@@ -1649,7 +1686,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `actions` _[Action](#action) array_ | The actions to execute after entering a state. |  |  |
 | `name` _string_ | The name of the state. |  |  |
-| `transitions` _[Transition](#transition) array_ | The next states and the conditions required to transition to those states. If no transitions exist, the policy assumes that it’s complete and can now stop managing the index |  |  |
+| `transitions` _[Transition](#transition) array_ | The next states and the conditions required to transition to those states. If no transitions exist, the policy assumes that it's complete and can now stop managing the index |  |  |
 
 
 #### TenantPermissionsSpec

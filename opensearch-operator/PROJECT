@@ -4,67 +4,72 @@
 # More info: https://book.kubebuilder.io/reference/project-config.html
 domain: opensearch.dremio.io
 layout:
-- go.kubebuilder.io/v3
+- go.kubebuilder.io/v4
 projectName: opensearch-operator
-repo: github.com/Opster/opensearch-k8s-operator/opensearch-operator
+repo: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: opensearch.dremio.io
-  group: opster
-  kind: OpenSearchCluster
-  path: opensearch.dremio.io/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: opensearch.dremio.io
-  group: opster
-  kind: OpensearchUser
-  path: opensearch.dremio.io/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: opensearch.dremio.io
-  group: opster
-  kind: OpensearchRole
-  path: opensearch.dremio.io/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: opensearch.dremio.io
-  group: opster
-  kind: OpensearchUserRoleBinding
-  path: opensearch.dremio.io/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: opensearch.dremio.io
-  group: opster
-  kind: OpensearchIndexTemplate
-  path: opensearch.dremio.io/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: opensearch.dremio.io
-  group: opster
-  kind: OpensearchComponentTemplate
-  path: opensearch.dremio.io/api/v1
-  version: v1
-- domain: opensearch.dremio.io
   group: opensearch.dremio.io
-  kind: OpensearchISMPolicy
+  kind: OpenSearchCluster
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.dremio.io
+  group: opensearch.dremio.io
+  kind: OpensearchUser
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.dremio.io
+  group: opensearch.dremio.io
+  kind: OpensearchRole
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.dremio.io
+  group: opensearch.dremio.io
+  kind: OpensearchUserRoleBinding
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.dremio.io
+  group: opensearch.dremio.io
+  kind: OpensearchTenant
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.dremio.io
+  group: opensearch.dremio.io
+  kind: OpensearchActionGroup
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.dremio.io
+  group: opensearch.dremio.io
+  kind: OpenSearchISMPolicy
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
   version: v1
 - api:
     crdVersion: v1
@@ -73,6 +78,24 @@ resources:
   domain: opensearch.dremio.io
   group: opensearch.dremio.io
   kind: OpensearchSnapshotPolicy
-  path: github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.dremio.io
+  group: opensearch.dremio.io
+  kind: OpensearchIndexTemplate
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.dremio.io
+  group: opensearch.dremio.io
+  kind: OpensearchComponentTemplate
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
   version: v1
 version: "3"

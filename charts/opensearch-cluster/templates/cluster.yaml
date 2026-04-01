@@ -1,9 +1,11 @@
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- $apiGroup := .Values.apiGroup | default "opensearch.dremio.io" }}
 ---
-apiVersion: opensearch.dremio.io/v1
+apiVersion: {{ $apiGroup }}/v1
 kind: OpenSearchCluster
 metadata:
   name: {{ $clusterName }}
+  namespace: {{ .Release.Namespace }}
   {{- with .Values.cluster.annotations }}
   annotations: {{ . | toYaml | nindent 4 }}
   {{- end }}
@@ -53,6 +55,9 @@ spec:
         {{- with .tls.transport.secret }}
         secret: {{ . | toYaml | nindent 10 }}
         {{- end }}
+        {{- if .tls.transport.rotateDaysBeforeExpiry }}
+        rotateDaysBeforeExpiry: {{ .tls.transport.rotateDaysBeforeExpiry }}
+        {{- end }}
         {{- if .tls.transport.duration }}
         duration: {{ .tls.transport.duration }}
         {{- end }}
@@ -71,6 +76,9 @@ spec:
         {{- end }}
         {{- with .tls.http.caSecret }}
         caSecret: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+        {{- if .tls.http.rotateDaysBeforeExpiry }}
+        rotateDaysBeforeExpiry: {{ .tls.http.rotateDaysBeforeExpiry }}
         {{- end }}
         {{- if .tls.http.duration }}
         duration: {{ .tls.http.duration }}

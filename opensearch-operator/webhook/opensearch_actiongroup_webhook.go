@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -40,13 +40,14 @@ func (v *OpenSearchActionGroupValidator) SetupWithManager(mgr ctrl.Manager) erro
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opsterv1.OpensearchActionGroup{}).
+		For(&opensearchv1.OpensearchActionGroup{}).
+		WithValidator(v).
 		Complete()
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchActionGroupValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	actionGroup := obj.(*opsterv1.OpensearchActionGroup)
+	actionGroup := obj.(*opensearchv1.OpensearchActionGroup)
 
 	// Validate that the OpenSearch cluster reference exists
 	if err := v.validateClusterReference(ctx, actionGroup); err != nil {
@@ -63,8 +64,8 @@ func (v *OpenSearchActionGroupValidator) ValidateCreate(ctx context.Context, obj
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchActionGroupValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldActionGroup := oldObj.(*opsterv1.OpensearchActionGroup)
-	newActionGroup := newObj.(*opsterv1.OpensearchActionGroup)
+	oldActionGroup := oldObj.(*opensearchv1.OpensearchActionGroup)
+	newActionGroup := newObj.(*opensearchv1.OpensearchActionGroup)
 
 	// Validate that the OpenSearch cluster reference hasn't changed
 	if err := v.validateClusterReferenceUnchanged(oldActionGroup, newActionGroup); err != nil {
@@ -86,22 +87,19 @@ func (v *OpenSearchActionGroupValidator) ValidateDelete(ctx context.Context, obj
 }
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
-func (v *OpenSearchActionGroupValidator) validateClusterReference(ctx context.Context, actionGroup *opsterv1.OpensearchActionGroup) error {
-	cluster := &opsterv1.OpenSearchCluster{}
-	err := v.Client.Get(ctx, types.NamespacedName{
+func (v *OpenSearchActionGroupValidator) validateClusterReference(ctx context.Context, actionGroup *opensearchv1.OpensearchActionGroup) error {
+	cluster := &opensearchv1.OpenSearchCluster{}
+	if err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      actionGroup.Spec.OpensearchRef.Name,
 		Namespace: actionGroup.Namespace,
-	}, cluster)
-
-	if err != nil {
+	}, cluster); err != nil {
 		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", actionGroup.Spec.OpensearchRef.Name, err)
 	}
-
 	return nil
 }
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
-func (v *OpenSearchActionGroupValidator) validateClusterReferenceUnchanged(old, new *opsterv1.OpensearchActionGroup) error {
+func (v *OpenSearchActionGroupValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchActionGroup) error {
 	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
 		return fmt.Errorf("cannot change the cluster an action group refers to")
 	}

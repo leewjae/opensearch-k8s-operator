@@ -89,7 +89,7 @@ type State struct {
 	Actions []Action `json:"actions"`
 	// The name of the state.
 	Name string `json:"name"`
-	// The next states and the conditions required to transition to those states. If no transitions exist, the policy assumes that it’s complete and can now stop managing the index
+	// The next states and the conditions required to transition to those states. If no transitions exist, the policy assumes that it's complete and can now stop managing the index
 	Transitions []Transition `json:"transitions,omitempty"`
 }
 
@@ -124,7 +124,7 @@ type Action struct {
 	Rollup *Rollup `json:"rollup,omitempty"`
 	// Allows you to reduce the number of primary shards in your indexes
 	Shrink *Shrink `json:"shrink,omitempty"`
-	// Back up your cluster’s indexes and state
+	// Back up your cluster's indexes and state
 	Snapshot *Snapshot `json:"snapshot,omitempty"`
 	// The timeout period for the action. Accepts time units for minutes, hours, and days.
 	Timeout *string `json:"timeout,omitempty"`
@@ -155,7 +155,7 @@ type Allocation struct {
 	Exclude string `json:"exclude"`
 	// Allocate the index to a node with any of the specified attributes.
 	Include string `json:"include"`
-	// Don’t allocate the index to a node with any of the specified attributes.
+	// Don't allocate the index to a node with any of the specified attributes.
 	Require string `json:"require"`
 	// Wait for the policy to execute before allocating the index to a node with a specified attribute.
 	WaitFor string `json:"waitFor"`

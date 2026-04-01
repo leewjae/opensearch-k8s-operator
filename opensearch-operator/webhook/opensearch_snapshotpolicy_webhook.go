@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -39,12 +39,13 @@ func (v *OpenSearchSnapshotPolicyValidator) SetupWithManager(mgr ctrl.Manager) e
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opsterv1.OpensearchSnapshotPolicy{}).
+		For(&opensearchv1.OpensearchSnapshotPolicy{}).
+		WithValidator(v).
 		Complete()
 }
 
 func (v *OpenSearchSnapshotPolicyValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	policy := obj.(*opsterv1.OpensearchSnapshotPolicy)
+	policy := obj.(*opensearchv1.OpensearchSnapshotPolicy)
 
 	if err := v.validateClusterReference(ctx, policy); err != nil {
 		return nil, err
@@ -66,8 +67,8 @@ func (v *OpenSearchSnapshotPolicyValidator) ValidateCreate(ctx context.Context, 
 }
 
 func (v *OpenSearchSnapshotPolicyValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldPolicy := oldObj.(*opsterv1.OpensearchSnapshotPolicy)
-	newPolicy := newObj.(*opsterv1.OpensearchSnapshotPolicy)
+	oldPolicy := oldObj.(*opensearchv1.OpensearchSnapshotPolicy)
+	newPolicy := newObj.(*opensearchv1.OpensearchSnapshotPolicy)
 
 	if err := v.validateClusterReferenceUnchanged(oldPolicy, newPolicy); err != nil {
 		return nil, err
@@ -96,27 +97,25 @@ func (v *OpenSearchSnapshotPolicyValidator) ValidateDelete(ctx context.Context, 
 	return nil, nil
 }
 
-func (v *OpenSearchSnapshotPolicyValidator) validateClusterReference(ctx context.Context, policy *opsterv1.OpensearchSnapshotPolicy) error {
-	cluster := &opsterv1.OpenSearchCluster{}
-	err := v.Client.Get(ctx, types.NamespacedName{
+func (v *OpenSearchSnapshotPolicyValidator) validateClusterReference(ctx context.Context, policy *opensearchv1.OpensearchSnapshotPolicy) error {
+	cluster := &opensearchv1.OpenSearchCluster{}
+	if err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      policy.Spec.OpensearchRef.Name,
 		Namespace: policy.Namespace,
-	}, cluster)
-
-	if err != nil {
+	}, cluster); err != nil {
 		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", policy.Spec.OpensearchRef.Name, err)
 	}
 	return nil
 }
 
-func (v *OpenSearchSnapshotPolicyValidator) validateClusterReferenceUnchanged(old, new *opsterv1.OpensearchSnapshotPolicy) error {
+func (v *OpenSearchSnapshotPolicyValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchSnapshotPolicy) error {
 	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
 		return fmt.Errorf("cannot change the cluster a snapshot policy refers to")
 	}
 	return nil
 }
 
-func (v *OpenSearchSnapshotPolicyValidator) validatePolicyNameUnchanged(old, new *opsterv1.OpensearchSnapshotPolicy) error {
+func (v *OpenSearchSnapshotPolicyValidator) validatePolicyNameUnchanged(old, new *opensearchv1.OpensearchSnapshotPolicy) error {
 	if old.Status.SnapshotPolicyName != "" && old.Status.SnapshotPolicyName != new.Spec.PolicyName {
 		return fmt.Errorf("cannot change the snapshot policy name")
 	}

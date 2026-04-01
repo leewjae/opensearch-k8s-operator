@@ -17,6 +17,8 @@ limitations under the License.
 package v1
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -77,6 +79,12 @@ type GeneralConfig struct {
 	// Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
 	// instead of the default internal Kubernetes service DNS name.
 	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
+	// gRPC API configuration for OpenSearch
+	Grpc *GrpcConfig `json:"grpc,omitempty"`
+	// HostNetwork enables host networking for all pods in the cluster.
+	HostNetwork bool `json:"hostNetwork,omitempty"`
+	// OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set.
+	OpenSearchHome string `json:"opensearchHome,omitempty"`
 }
 
 type PdbConfig struct {
@@ -162,9 +170,11 @@ type PVCSource struct {
 
 // ConfMgmt defines which additional services will be deployed
 type ConfMgmt struct {
-	AutoScaler  bool `json:"autoScaler,omitempty"`
-	VerUpdate   bool `json:"VerUpdate,omitempty"`
-	SmartScaler bool `json:"smartScaler,omitempty"`
+	AutoScaler bool `json:"autoScaler,omitempty"`
+	VerUpdate  bool `json:"VerUpdate,omitempty"`
+	// +kubebuilder:default=true
+	// +kubebuilder:validation:Required
+	SmartScaler bool `json:"smartScaler"`
 }
 
 type MonitoringConfig struct {
@@ -198,6 +208,7 @@ type BootstrapConfig struct {
 	HostAliases       []corev1.HostAlias `json:"hostAliases,omitempty"`
 	DiskSize          resource.Quantity  `json:"diskSize,omitempty"`
 	PriorityClassName string             `json:"priorityClassName,omitempty"`
+	StorageClassName  *string            `json:"storageClass,omitempty"`
 }
 
 type DashboardsServiceSpec struct {
@@ -238,6 +249,8 @@ type DashboardsConfig struct {
 	// Set security context for the dashboards pods' container
 	SecurityContext   *corev1.SecurityContext `json:"securityContext,omitempty"`
 	PriorityClassName string                  `json:"priorityClassName,omitempty"`
+	// OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set.
+	OpenSearchDashboardsHome string `json:"opensearchDashboardsHome,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -345,6 +358,9 @@ type SecurityUpdateJobConfig struct {
 	Resources         corev1.ResourceRequirements `json:"resources,omitempty"`
 	PriorityClassName string                      `json:"priorityClassName,omitempty"`
 	Labels            map[string]string           `json:"labels,omitempty"`
+	Tolerations       []corev1.Toleration         `json:"tolerations,omitempty"`
+	NodeSelector      map[string]string           `json:"nodeSelector,omitempty"`
+	Affinity          *corev1.Affinity            `json:"affinity,omitempty"`
 }
 
 type ImageSpec struct {
@@ -353,7 +369,7 @@ type ImageSpec struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
-// +kubebuilder:validation:XValidation:rule="(has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0) == 1",message="exactly one of secret, configMap, emptyDir, csi, projected, nfs must be set"
+// +kubebuilder:validation:XValidation:rule="(has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.persistentVolumeClaim)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0) == 1",message="exactly one of secret, configMap, emptyDir, csi, persistentVolumeClaim, projected, nfs, hostPath must be set"
 type AdditionalVolume struct {
 	// Name to use for the volume. Required.
 	Name string `json:"name"`
@@ -375,6 +391,8 @@ type AdditionalVolume struct {
 	Projected *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
 	// NFS object to use to populate the volume
 	NFS *corev1.NFSVolumeSource `json:"nfs,omitempty"`
+	// HostPath object to use to populate the volume
+	HostPath *corev1.HostPathVolumeSource `json:"hostPath,omitempty"`
 	// Whether to restart the pods on content change
 	RestartPods bool `json:"restartPods,omitempty"`
 }
@@ -390,6 +408,36 @@ type SnapshotRepoConfig struct {
 	Name     string            `json:"name"`
 	Type     string            `json:"type"`
 	Settings map[string]string `json:"settings,omitempty"`
+}
+
+// GrpcConfig defines gRPC API configuration for OpenSearch
+type GrpcConfig struct {
+	// Enable gRPC transport. When enabled, gRPC APIs will be available.
+	Enable bool `json:"enable,omitempty"`
+	// Port range for gRPC transport (e.g., "9400-9500"). If not specified, defaults to "9400-9500".
+	Port string `json:"port,omitempty"`
+	// Host addresses the gRPC server will bind to. If not specified, defaults to ["0.0.0.0"].
+	Host []string `json:"host,omitempty"`
+	// Bind host addresses for the gRPC server. Can be distinct from publish hosts.
+	BindHost []string `json:"bindHost,omitempty"`
+	// Publish hostnames or IPs for client connections.
+	PublishHost []string `json:"publishHost,omitempty"`
+	// Publish port number that this node uses to publish itself to peers for gRPC transport.
+	PublishPort *int32 `json:"publishPort,omitempty"`
+	// Number of Netty worker threads for the gRPC server. Controls concurrency and parallelism.
+	NettyWorkerCount *int32 `json:"nettyWorkerCount,omitempty"`
+	// Number of threads in the fork-join pool for processing gRPC service calls.
+	NettyExecutorCount *int32 `json:"nettyExecutorCount,omitempty"`
+	// Maximum number of simultaneous in-flight requests allowed per client connection.
+	MaxConcurrentConnectionCalls *int32 `json:"maxConcurrentConnectionCalls,omitempty"`
+	// Maximum age a connection can reach before being gracefully closed (e.g., "500ms", "2m").
+	MaxConnectionAge string `json:"maxConnectionAge,omitempty"`
+	// Maximum duration for which a connection can be idle before being closed (e.g., "2m").
+	MaxConnectionIdle string `json:"maxConnectionIdle,omitempty"`
+	// Amount of time to wait for keepalive ping acknowledgment before closing the connection (e.g., "1s").
+	KeepaliveTimeout string `json:"keepaliveTimeout,omitempty"`
+	// Maximum inbound message size for gRPC requests (e.g., "10mb", "10485760").
+	MaxMsgSize string `json:"maxMsgSize,omitempty"`
 }
 
 // ClusterSpec defines the desired state of OpenSearchCluster
@@ -454,6 +502,25 @@ type OpenSearchClusterList struct {
 
 func init() {
 	SchemeBuilder.Register(&OpenSearchCluster{}, &OpenSearchClusterList{})
+}
+
+const (
+	DefaultOpenSearchHome           = "/usr/share/opensearch"
+	DefaultOpenSearchDashboardsHome = "/usr/share/opensearch-dashboards"
+)
+
+func (g GeneralConfig) GetOpenSearchHome() string {
+	if g.OpenSearchHome != "" {
+		return strings.TrimRight(g.OpenSearchHome, "/")
+	}
+	return DefaultOpenSearchHome
+}
+
+func (d DashboardsConfig) GetOpenSearchDashboardsHome() string {
+	if d.OpenSearchDashboardsHome != "" {
+		return strings.TrimRight(d.OpenSearchDashboardsHome, "/")
+	}
+	return DefaultOpenSearchDashboardsHome
 }
 
 func (s ImageSpec) GetImagePullPolicy() (_ corev1.PullPolicy) {
