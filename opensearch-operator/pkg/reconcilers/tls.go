@@ -217,7 +217,7 @@ func (r *TLSReconciler) adminDnConfig() []string {
 		return tlsConfig.Http.AdminDn
 	}
 	if tlsConfig.Transport != nil {
-		return tlsConfig.Transport.AdminDn
+		return tlsConfig.Transport.AdminDn //nolint:staticcheck // Backward compatibility for CRs created before http.adminDn existed.
 	}
 	return nil
 }

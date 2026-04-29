@@ -231,7 +231,7 @@ var _ = Describe("TLS Controller", func() {
 									Secret: corev1.LocalObjectReference{Name: "cert-transport"},
 								},
 								NodesDn: []string{"CN=mycn"},
-								AdminDn: []string{"CN=transport-admin"},
+								AdminDn: []string{"CN=transport-admin"}, //nolint:staticcheck // Ensures http.adminDn takes precedence over the legacy field.
 							},
 							Http: &opensearchv1.TlsConfigHttp{
 								Generate: false,
@@ -272,7 +272,7 @@ var _ = Describe("TLS Controller", func() {
 									Secret: corev1.LocalObjectReference{Name: "cert-transport"},
 								},
 								NodesDn: []string{"CN=mycn"},
-								AdminDn: []string{"CN=transport-admin"},
+								AdminDn: []string{"CN=transport-admin"}, //nolint:staticcheck // Verifies fallback for upgraded CRs using the legacy field.
 							},
 							Http: &opensearchv1.TlsConfigHttp{
 								Generate: false,
