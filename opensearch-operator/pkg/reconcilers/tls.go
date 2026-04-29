@@ -176,7 +176,6 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 	}
 
 	if helpers.SecurityChangeVersion(r.instance) {
-		tlsConfig := r.instance.Spec.Security.Tls.Http
 		if shouldGenerate {
 			ca, err := r.getReferencedCaCertOrDefault(r.adminCAConfig())
 			if err != nil {
@@ -189,10 +188,9 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 			}
 			certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
 		} else {
-			certDN = strings.Join(tlsConfig.AdminDn, "\",\"")
+			certDN = strings.Join(r.adminDnConfig(), "\",\"")
 		}
 	} else {
-		tlsConfig := r.instance.Spec.Security.Tls.Transport
 		if shouldGenerate {
 			ca, err := r.getReferencedCaCertOrDefault(r.adminCAConfig())
 			if err != nil {
@@ -205,7 +203,7 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 			}
 			certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
 		} else {
-			certDN = strings.Join(tlsConfig.AdminDn, "\",\"") //nolint:staticcheck
+			certDN = strings.Join(r.adminDnConfig(), "\",\"")
 		}
 	}
 
@@ -213,9 +211,24 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 	return res, nil
 }
 
+func (r *TLSReconciler) adminDnConfig() []string {
+	tlsConfig := r.instance.Spec.Security.Tls
+	if helpers.SecurityChangeVersion(r.instance) && tlsConfig.Http != nil && len(tlsConfig.Http.AdminDn) > 0 {
+		return tlsConfig.Http.AdminDn
+	}
+	if tlsConfig.Transport != nil {
+		return tlsConfig.Transport.AdminDn
+	}
+	return nil
+}
+
 func (r *TLSReconciler) adminCAConfig() corev1.LocalObjectReference {
-	if helpers.SecurityChangeVersion(r.instance) {
+	tlsConfig := r.instance.Spec.Security.Tls
+	if helpers.SecurityChangeVersion(r.instance) && tlsConfig.Http != nil {
 		return r.instance.Spec.Security.Tls.Http.CaSecret
+	}
+	if tlsConfig.Transport == nil {
+		return corev1.LocalObjectReference{}
 	}
 	return r.instance.Spec.Security.Tls.Transport.CaSecret
 }
