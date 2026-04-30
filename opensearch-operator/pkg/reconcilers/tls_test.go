@@ -213,6 +213,87 @@ var _ = Describe("TLS Controller", func() {
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=admin,OU=" + clusterName + "\"]"))
 		})
+
+		It("Should use http admin DNs with external admin certificates", func() {
+			clusterName := "tls-test-http-admin-dn"
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.8.0"},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							AdminSecret: corev1.LocalObjectReference{Name: "admin-cert"},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{
+								Generate: false,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret: corev1.LocalObjectReference{Name: "cert-transport"},
+								},
+								NodesDn: []string{"CN=mycn"},
+								AdminDn: []string{"CN=transport-admin"}, //nolint:staticcheck // Ensures http.adminDn takes precedence over the legacy field.
+							},
+							Http: &opensearchv1.TlsConfigHttp{
+								Generate: false,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret: corev1.LocalObjectReference{Name: "cert-http"},
+								},
+								AdminDn: []string{"CN=http-admin1", "CN=http-admin2"},
+							},
+						},
+					},
+				},
+			}
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("[\"CN=http-admin1\",\"CN=http-admin2\"]"))
+		})
+
+		It("Should fall back to transport admin DNs for upgraded clusters with external admin certificates", func() {
+			clusterName := "tls-test-legacy-admin-dn"
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.8.0"},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							AdminSecret: corev1.LocalObjectReference{Name: "admin-cert"},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{
+								Generate: false,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret: corev1.LocalObjectReference{Name: "cert-transport"},
+								},
+								NodesDn: []string{"CN=mycn"},
+								AdminDn: []string{"CN=transport-admin"}, //nolint:staticcheck // Verifies fallback for upgraded CRs using the legacy field.
+							},
+							Http: &opensearchv1.TlsConfigHttp{
+								Generate: false,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret: corev1.LocalObjectReference{Name: "cert-http"},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("[\"CN=transport-admin\"]"))
+		})
 	})
 
 	Context("When Reconciling the TLS configuration with external per-node certificates", func() {
