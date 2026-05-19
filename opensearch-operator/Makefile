@@ -92,7 +92,7 @@ fmt: ## Run go fmt against code.
 	go fmt ./...
 
 .PHONY: check-go-security-baseline
-check-go-security-baseline: ## Ensure Dockerfile uses a non-vulnerable Go baseline (CVE-2023-45288).
+check-go-security-baseline: ## Enforce CVE baselines (Go stdlib/x-net) and proxy HTTP/2 hardening.
 	./hack/check-go-security-baseline.sh Dockerfile
 
 .PHONY: lint
