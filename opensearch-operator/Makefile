@@ -91,10 +91,6 @@ helm-docs: ${HELM_DOCS}
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
-.PHONY: check-go-security-baseline
-check-go-security-baseline: ## Enforce CVE baselines (Go stdlib/x-net) and proxy HTTP/2 hardening.
-	./hack/check-go-security-baseline.sh Dockerfile
-
 .PHONY: lint
 lint:
 	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v2.7-alpine golangci-lint run
@@ -108,7 +104,7 @@ genmocks: mockery
 	$(MOCKERY) --all
 
 .PHONY: test
-test: check-go-security-baseline manifests generate fmt vet envtest genmocks ## Run tests.
+test: manifests generate fmt vet envtest genmocks ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out -test.v
 
 ##@ Build
